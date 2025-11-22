@@ -271,7 +271,7 @@ export function ChatWindow({ conversationId }: { conversationId: string | null }
                     )}
                 </div>
                 <div>
-                    <div className="font-semibold">
+                    <div className="font-bold text-black text-lg">
                         {otherUser ? `${otherUser.first_name || ''} ${otherUser.last_name || ''}`.trim() || otherUser.username : "Chat"}
                     </div>
                     <div className="text-xs text-gray-500">

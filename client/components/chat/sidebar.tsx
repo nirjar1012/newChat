@@ -247,7 +247,7 @@ export function Sidebar({ onSelectConversation, selectedConversationId }: { onSe
                                     </div>
                                 </div>
                                 <div className="border-b border-gray-100 flex-1 py-1">
-                                    <div className="font-normal text-[#111b21] text-[17px]">{u.first_name} {u.last_name}</div>
+                                    <div className="font-semibold text-black text-[17px]">{u.first_name} {u.last_name}</div>
                                 </div>
                             </div>
                         ))}
@@ -282,7 +282,7 @@ export function Sidebar({ onSelectConversation, selectedConversationId }: { onSe
                                     </div>
                                     <div className="flex-1 overflow-hidden border-b border-gray-100 group-hover:border-transparent pb-3 pt-1 pr-2">
                                         <div className="flex justify-between items-baseline mb-0.5">
-                                            <div className="font-normal text-[#111b21] text-[17px] truncate">
+                                            <div className="font-semibold text-black text-[17px] truncate">
                                                 {otherUser ? `${otherUser.first_name || ''} ${otherUser.last_name || ''}`.trim() || otherUser.username : "Unknown User"}
                                             </div>
                                             {conv.last_message?.created_at && (
