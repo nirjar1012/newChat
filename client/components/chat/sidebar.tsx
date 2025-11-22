@@ -216,7 +216,7 @@ export function Sidebar({ onSelectConversation, selectedConversationId }: { onSe
                             </div>
                         </div>
                     ))}
-                    {onlineUsers.filter(u => u.id !== user?.id).length === 0 && <div className="text-xs text-gray-400 italic">No one else is online</div>}
+                    {onlineUsers.filter(u => u && u.id && u.id !== user?.id).length === 0 && <div className="text-xs text-gray-400 italic">No one else is online</div>}
                 </div>
             </div>
 
