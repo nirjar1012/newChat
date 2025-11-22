@@ -173,73 +173,81 @@ export function Sidebar({ onSelectConversation, selectedConversationId }: { onSe
     };
 
     return (
-        <div className="w-80 border-r h-full flex flex-col bg-white">
-            <div className="p-4 border-b flex items-center justify-between bg-gray-50">
+        <div className="w-[400px] border-r h-full flex flex-col bg-white border-gray-200">
+            {/* Header */}
+            <div className="h-[60px] px-4 bg-[#f0f2f5] flex items-center justify-between border-b border-gray-200 shrink-0">
                 <UserButton />
-                <div className="font-semibold">Chats</div>
-                <button className="p-2 hover:bg-gray-200 rounded-full">
-                    <Plus className="w-5 h-5" />
-                </button>
+                <div className="flex gap-4 text-[#54656f]">
+                    <button className="p-2 hover:bg-gray-200 rounded-full transition-colors">
+                        <MessageSquare className="w-5 h-5" />
+                    </button>
+                    <button className="p-2 hover:bg-gray-200 rounded-full transition-colors">
+                        <Plus className="w-5 h-5" />
+                    </button>
+                </div>
             </div>
 
-            <div className="p-2">
+            {/* Search & Filter */}
+            <div className="p-2 bg-white border-b border-gray-100">
                 <div className="relative">
-                    <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-[#54656f]">
+                        <Search className="w-4 h-4" />
+                    </div>
                     <input
                         type="text"
-                        placeholder="Search users..."
-                        className="w-full pl-9 pr-4 py-2 bg-gray-100 rounded-lg focus:outline-none focus:ring-1 focus:ring-green-500"
+                        placeholder="Search or start new chat"
+                        className="w-full pl-10 pr-4 py-1.5 bg-[#f0f2f5] rounded-lg text-sm focus:outline-none text-[#3b4a54] placeholder:text-[#54656f]"
                         value={searchQuery}
                         onChange={(e) => handleSearch(e.target.value)}
                     />
                 </div>
             </div>
 
-            {/* Online Users Section */}
-            <div className="p-3 border-b overflow-x-auto whitespace-nowrap">
-                <div className="text-xs text-gray-500 mb-2 font-semibold">ONLINE USERS</div>
+            {/* Online Users (Custom Feature - kept but styled) */}
+            <div className="py-3 px-4 border-b border-gray-100 overflow-x-auto whitespace-nowrap bg-white">
+                <div className="text-xs text-[#008069] font-medium mb-3 uppercase tracking-wider">Online Now</div>
                 <div className="flex gap-4">
                     {onlineUsers.filter(u => u && u.id && u.id !== user?.id).map(u => (
-                        <div key={u.id} className="flex flex-col items-center cursor-pointer" onClick={() => startConversation(u.id)}>
+                        <div key={u.id} className="flex flex-col items-center cursor-pointer group" onClick={() => startConversation(u.id)}>
                             <div className="relative">
-                                <div className="w-10 h-10 bg-gray-300 rounded-full overflow-hidden">
-                                    {u.profile_image ? <img src={u.profile_image} alt={u.first_name} /> : (
-                                        <div className="w-full h-full flex items-center justify-center bg-gray-200 text-xs">
+                                <div className="w-12 h-12 bg-gray-200 rounded-full overflow-hidden ring-2 ring-transparent group-hover:ring-[#008069] transition-all">
+                                    {u.profile_image ? <img src={u.profile_image} alt={u.first_name} className="w-full h-full object-cover" /> : (
+                                        <div className="w-full h-full flex items-center justify-center bg-[#dfe3e5] text-[#54656f] font-medium text-lg">
                                             {u.first_name?.[0]}{u.last_name?.[0]}
                                         </div>
                                     )}
                                 </div>
-                                <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
+                                <div className="absolute bottom-0.5 right-0.5 w-3 h-3 bg-[#25d366] rounded-full border-2 border-white"></div>
                             </div>
-                            <div className="text-xs mt-1 max-w-[60px] truncate">
+                            <div className="text-xs mt-1.5 text-[#3b4a54] font-medium max-w-[70px] truncate">
                                 {u.first_name}
                             </div>
                         </div>
                     ))}
-                    {onlineUsers.filter(u => u && u.id && u.id !== user?.id).length === 0 && <div className="text-xs text-gray-400 italic">No one else is online</div>}
+                    {onlineUsers.filter(u => u && u.id && u.id !== user?.id).length === 0 && (
+                        <div className="text-sm text-[#8696a0] italic py-2">No one else is online</div>
+                    )}
                 </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto">
+            {/* Conversation List */}
+            <div className="flex-1 overflow-y-auto custom-scrollbar">
                 {searchQuery.length > 0 ? (
-                    <div className="p-2">
-                        <div className="text-xs text-gray-500 mb-2">Search Results</div>
+                    <div className="py-2">
+                        <div className="px-4 py-2 text-xs text-[#008069] font-medium uppercase">Search Results</div>
                         {searchResults.map((u) => (
                             <div
                                 key={u.id}
-                                className="flex items-center gap-3 p-3 hover:bg-gray-100 rounded-lg cursor-pointer"
+                                className="flex items-center gap-3 px-3 py-3 hover:bg-[#f0f2f5] cursor-pointer transition-colors"
                                 onClick={() => startConversation(u.clerk_id)}
                             >
                                 <div className="relative">
-                                    <div className="w-10 h-10 bg-gray-300 rounded-full overflow-hidden">
-                                        {u.profile_image ? <img src={u.profile_image} alt={u.username} /> : null}
+                                    <div className="w-12 h-12 bg-gray-200 rounded-full overflow-hidden">
+                                        {u.profile_image ? <img src={u.profile_image} alt={u.username} className="w-full h-full object-cover" /> : null}
                                     </div>
-                                    {onlineUsers.some(ou => ou.id === u.clerk_id) && (
-                                        <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
-                                    )}
                                 </div>
-                                <div>
-                                    <div className="font-medium">{u.first_name} {u.last_name}</div>
+                                <div className="border-b border-gray-100 flex-1 py-1">
+                                    <div className="font-normal text-[#111b21] text-[17px]">{u.first_name} {u.last_name}</div>
                                 </div>
                             </div>
                         ))}
@@ -249,45 +257,52 @@ export function Sidebar({ onSelectConversation, selectedConversationId }: { onSe
                         {conversations.map((conv: any) => {
                             const otherUser = conv.other_user;
                             const isOnline = otherUser && onlineUsers.some(u => u.id === otherUser.clerk_id);
+                            const isActive = selectedConversationId === conv.id;
 
                             return (
                                 <div
                                     key={conv.id}
                                     className={cn(
-                                        "flex items-center gap-3 p-3 hover:bg-gray-100 cursor-pointer border-b border-gray-50",
-                                        selectedConversationId === conv.id && "bg-gray-100"
+                                        "flex items-center gap-3 px-3 py-3 cursor-pointer transition-colors group",
+                                        isActive ? "bg-[#f0f2f5]" : "hover:bg-[#f5f6f6]"
                                     )}
                                     onClick={() => onSelectConversation(conv.id)}
                                 >
-                                    <div className="relative">
-                                        <div className="w-12 h-12 bg-gray-300 rounded-full overflow-hidden flex items-center justify-center">
+                                    <div className="relative shrink-0">
+                                        <div className="w-[49px] h-[49px] bg-gray-200 rounded-full overflow-hidden flex items-center justify-center">
                                             {otherUser?.profile_image ? (
-                                                <img src={otherUser.profile_image} alt={otherUser.first_name} />
+                                                <img src={otherUser.profile_image} alt={otherUser.first_name} className="w-full h-full object-cover" />
                                             ) : (
                                                 <UserButton />
                                             )}
                                         </div>
-                                        {isOnline ? (
-                                            <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
-                                        ) : (
-                                            <div className="absolute bottom-0 right-0 w-3 h-3 bg-gray-400 rounded-full border-2 border-white"></div>
+                                        {isOnline && (
+                                            <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-[#25d366] rounded-full border-2 border-white"></div>
                                         )}
                                     </div>
-                                    <div className="flex-1 overflow-hidden">
-                                        <div className="font-medium truncate">
-                                            {otherUser ? `${otherUser.first_name || ''} ${otherUser.last_name || ''}`.trim() || otherUser.username : "Unknown User"}
-                                        </div>
-                                        <div className="text-sm text-gray-500 truncate flex justify-between">
-                                            <span className="truncate max-w-[140px]">
-                                                {conv.last_message?.message_type === 'image' ? '📷 Image' :
-                                                    conv.last_message?.message_type === 'file' ? '📎 File' :
-                                                        conv.last_message?.content || 'No messages yet'}
-                                            </span>
+                                    <div className="flex-1 overflow-hidden border-b border-gray-100 group-hover:border-transparent pb-3 pt-1 pr-2">
+                                        <div className="flex justify-between items-baseline mb-0.5">
+                                            <div className="font-normal text-[#111b21] text-[17px] truncate">
+                                                {otherUser ? `${otherUser.first_name || ''} ${otherUser.last_name || ''}`.trim() || otherUser.username : "Unknown User"}
+                                            </div>
                                             {conv.last_message?.created_at && (
-                                                <span className="text-xs ml-2">
-                                                    {new Date(conv.last_message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                                </span>
+                                                <div className="text-xs text-[#667781] shrink-0">
+                                                    {new Date(conv.last_message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}
+                                                </div>
                                             )}
+                                        </div>
+                                        <div className="flex justify-between items-center">
+                                            <div className="text-sm text-[#667781] truncate max-w-[200px]">
+                                                {conv.last_message?.message_type === 'image' ? (
+                                                    <span className="flex items-center gap-1"><span className="text-xs">📷</span> Photo</span>
+                                                ) : conv.last_message?.message_type === 'file' ? (
+                                                    <span className="flex items-center gap-1"><span className="text-xs">📎</span> File</span>
+                                                ) : (
+                                                    conv.last_message?.content || 'No messages yet'
+                                                )}
+                                            </div>
+                                            {/* Unread badge placeholder */}
+                                            {/* <div className="w-5 h-5 bg-[#25d366] rounded-full flex items-center justify-center text-white text-[10px] font-bold">2</div> */}
                                         </div>
                                     </div>
                                 </div>

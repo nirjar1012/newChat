@@ -281,42 +281,89 @@ export function ChatWindow({ conversationId }: { conversationId: string | null }
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                {messages.map((msg) => {
+            <div className="flex-1 overflow-y-auto p-4 space-y-2 bg-[#efeae2]">
+                {messages.reduce((acc: React.ReactNode[], msg, index) => {
                     const isMe = msg.sender_id === user?.id;
-                    return (
+                    const previousMsg = messages[index - 1];
+                    const isFirstInGroup = !previousMsg || previousMsg.sender_id !== msg.sender_id;
+
+                    // Date Separator Logic
+                    const msgDate = new Date(msg.created_at);
+                    const prevDate = previousMsg ? new Date(previousMsg.created_at) : null;
+
+                    if (!prevDate || msgDate.toDateString() !== prevDate.toDateString()) {
+                        let dateLabel = msgDate.toLocaleDateString([], { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+                        const today = new Date();
+                        const yesterday = new Date();
+                        yesterday.setDate(yesterday.getDate() - 1);
+
+                        if (msgDate.toDateString() === today.toDateString()) {
+                            dateLabel = "Today";
+                        } else if (msgDate.toDateString() === yesterday.toDateString()) {
+                            dateLabel = "Yesterday";
+                        }
+
+                        acc.push(
+                            <div key={`date-${msg.id}`} className="flex justify-center my-4">
+                                <span className="bg-white/90 text-gray-600 text-xs py-1 px-3 rounded-lg shadow-sm border border-gray-100">
+                                    {dateLabel}
+                                </span>
+                            </div>
+                        );
+                    }
+
+                    acc.push(
                         <div
                             key={msg.id}
                             className={cn(
                                 "flex w-full",
-                                isMe ? "justify-end" : "justify-start"
+                                isMe ? "justify-end" : "justify-start",
+                                isFirstInGroup ? "mt-2" : "mt-0.5"
                             )}
                         >
                             <div
                                 className={cn(
-                                    "max-w-[70%] p-3 rounded-lg shadow-sm",
-                                    isMe ? "bg-[#d9fdd3]" : "bg-white"
+                                    "max-w-[70%] px-2 py-1 rounded-lg shadow-sm relative group",
+                                    isMe ? "bg-[#d9fdd3] rounded-tr-none" : "bg-white rounded-tl-none"
                                 )}
                             >
                                 {msg.message_type === 'image' && msg.file_url && (
-                                    <img src={msg.file_url} alt="Shared image" className="max-w-full rounded mb-2" />
+                                    <div className="mb-1 rounded overflow-hidden">
+                                        <img src={msg.file_url} alt="Shared image" className="max-w-full max-h-64 object-cover" />
+                                    </div>
                                 )}
                                 {msg.message_type === 'file' && msg.file_url && (
-                                    <a href={msg.file_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-blue-600 underline mb-2">
-                                        <Paperclip className="w-4 h-4" />
-                                        {msg.content}
+                                    <a href={msg.file_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-2 bg-black/5 rounded mb-1 hover:bg-black/10 transition-colors">
+                                        <div className="bg-red-100 p-2 rounded-full">
+                                            <Paperclip className="w-4 h-4 text-red-500" />
+                                        </div>
+                                        <span className="text-sm truncate max-w-[150px]">{msg.content}</span>
                                     </a>
                                 )}
                                 {msg.message_type === 'text' && (
-                                    <div className="text-sm">{msg.content}</div>
+                                    <div className="text-sm text-gray-800 leading-relaxed px-1 pt-1">
+                                        {msg.content}
+                                    </div>
                                 )}
-                                <div className="text-[10px] text-gray-500 text-right mt-1">
-                                    {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                <div className={cn(
+                                    "text-[10px] text-gray-500 text-right flex items-center justify-end gap-1",
+                                    msg.message_type === 'text' ? "-mt-1 mb-0.5" : "mt-1"
+                                )}>
+                                    {new Date(msg.created_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}
+                                    {isMe && (
+                                        <span className="text-blue-500">
+                                            {/* Double tick placeholder - logic for read status needed later */}
+                                            <svg viewBox="0 0 16 15" width="16" height="15" className="w-3 h-3">
+                                                <path fill="currentColor" d="M15.01 3.316l-.478-.372a.365.365 0 0 0-.51.063L8.666 9.879a.32.32 0 0 1-.484.033l-.358-.325a.319.319 0 0 0-.484.032l-.378.483a.418.418 0 0 0 .036.541l1.32 1.266c.143.14.361.125.473-.018l5.358-7.717a.42.42 0 0 0-.063-.51zM6.013 3.316l-.478-.372a.365.365 0 0 0-.51.063L.666 9.879a.32.32 0 0 1-.484.033l-.358-.325a.319.319 0 0 0-.484.032l-.378.483a.418.418 0 0 0 .036.541l1.32 1.266c.143.14.361.125.473-.018l5.358-7.717a.42.42 0 0 0-.063-.51z" />
+                                            </svg>
+                                        </span>
+                                    )}
                                 </div>
                             </div>
                         </div>
                     );
-                })}
+                    return acc;
+                }, [])}
                 <div ref={messagesEndRef} />
             </div>
 
