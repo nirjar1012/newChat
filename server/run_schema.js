@@ -15,7 +15,7 @@ async function run() {
         await client.connect();
         console.log('Connected.');
 
-        const sqlPath = path.join(__dirname, '../supabase_schema.sql');
+        const sqlPath = path.join(__dirname, '../fix_columns.sql');
         console.log(`Reading SQL from ${sqlPath}`);
         const sql = fs.readFileSync(sqlPath, 'utf8');
 

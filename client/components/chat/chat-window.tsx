@@ -14,6 +14,7 @@ interface Message {
     created_at: string;
     message_type: 'text' | 'image' | 'file';
     file_url?: string;
+    read_at?: string | null;
 }
 
 export function ChatWindow({ conversationId }: { conversationId: string | null }) {
@@ -35,6 +36,7 @@ export function ChatWindow({ conversationId }: { conversationId: string | null }
         if (conversationId && user) {
             fetchMessages(conversationId);
             fetchConversationDetails(conversationId);
+            markMessagesAsRead(conversationId);
 
             if (socket) {
                 socket.emit("join-room", conversationId);
@@ -54,15 +56,24 @@ export function ChatWindow({ conversationId }: { conversationId: string | null }
         if (!socket) return;
 
         const handleReceiveMessage = (message: Message) => {
-            setMessages((prev) => [...prev, message]);
-            scrollToBottom();
+            if (message.sender_id === user?.id) return;
+
+            if (conversationId && (message as any).conversation_id === conversationId) {
+                if (message.sender_id !== user?.id) {
+                    setMessages((prev) => [...prev, message]);
+                    scrollToBottom();
+                    markMessagesAsRead(conversationId);
+                }
+            }
         };
 
         const handleUserTyping = ({ userId, isTyping }: { userId: string, isTyping: boolean }) => {
-            if (isTyping) {
-                setTypingUser(userId);
-            } else {
-                setTypingUser(null);
+            if (userId !== user?.id) {
+                if (isTyping) {
+                    setTypingUser(userId);
+                } else {
+                    setTypingUser(null);
+                }
             }
         };
 
@@ -73,12 +84,11 @@ export function ChatWindow({ conversationId }: { conversationId: string | null }
             socket.off("message:receive", handleReceiveMessage);
             socket.off("user_typing", handleUserTyping);
         };
-    }, [socket]);
+    }, [socket, conversationId, user]);
 
     useEffect(() => {
         if (!socket || !otherUser) return;
 
-        // Check initial status
         socket.emit("get-online-users");
 
         const handleOnlineUsers = (users: any[]) => {
@@ -108,6 +118,17 @@ export function ChatWindow({ conversationId }: { conversationId: string | null }
             socket.off("user-offline", handleUserOffline);
         };
     }, [socket, otherUser]);
+
+    const markMessagesAsRead = async (convId: string) => {
+        if (!user) return;
+
+        await supabase
+            .from("messages")
+            .update({ read_at: new Date().toISOString() })
+            .eq("conversation_id", convId)
+            .neq("sender_id", user.id)
+            .is("read_at", null);
+    };
 
     const fetchConversationDetails = async (id: string) => {
         if (!user) return;
@@ -193,12 +214,24 @@ export function ChatWindow({ conversationId }: { conversationId: string | null }
             sender_id: user.id,
             content: file.name,
             file_url: publicUrl,
-            message_type: file.type.startsWith('image/') ? 'image' : 'file'
+            message_type: file.type.startsWith('image/') ? 'image' : 'file',
+            created_at: new Date().toISOString(),
+            read_at: null
         };
+
+        // Optimistic update
+        setMessages((prev) => [...prev, messageData as any]);
+        scrollToBottom();
 
         const { data, error } = await supabase
             .from("messages")
-            .insert(messageData)
+            .insert({
+                conversation_id: conversationId,
+                sender_id: user.id,
+                content: messageData.content,
+                message_type: messageData.message_type,
+                file_url: messageData.file_url
+            })
             .select()
             .single();
 
@@ -211,10 +244,7 @@ export function ChatWindow({ conversationId }: { conversationId: string | null }
 
             if (socket) {
                 socket.emit("message:send", data);
-            } else {
-                setMessages((prev) => [...prev, data as any]);
             }
-            scrollToBottom();
         }
     };
 
@@ -225,12 +255,24 @@ export function ChatWindow({ conversationId }: { conversationId: string | null }
             conversation_id: conversationId,
             sender_id: user.id,
             content: newMessage,
-            message_type: 'text'
+            message_type: 'text',
+            created_at: new Date().toISOString(),
+            read_at: null
         };
+
+        // Optimistic update
+        setMessages((prev) => [...prev, messageData as any]);
+        setNewMessage("");
+        scrollToBottom();
 
         const { data, error } = await supabase
             .from("messages")
-            .insert(messageData)
+            .insert({
+                conversation_id: conversationId,
+                sender_id: user.id,
+                content: messageData.content,
+                message_type: 'text'
+            })
             .select()
             .single();
 
@@ -243,11 +285,7 @@ export function ChatWindow({ conversationId }: { conversationId: string | null }
 
             if (socket) {
                 socket.emit("message:send", data);
-            } else {
-                setMessages((prev) => [...prev, data as any]);
             }
-            setNewMessage("");
-            scrollToBottom();
         }
     };
 
@@ -351,8 +389,8 @@ export function ChatWindow({ conversationId }: { conversationId: string | null }
                                 )}>
                                     {new Date(msg.created_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}
                                     {isMe && (
-                                        <span className="text-blue-500">
-                                            {/* Double tick placeholder - logic for read status needed later */}
+                                        <span className={cn("ml-1", msg.read_at ? "text-blue-500" : "text-gray-400")}>
+                                            {/* Double tick icon */}
                                             <svg viewBox="0 0 16 15" width="16" height="15" className="w-3 h-3">
                                                 <path fill="currentColor" d="M15.01 3.316l-.478-.372a.365.365 0 0 0-.51.063L8.666 9.879a.32.32 0 0 1-.484.033l-.358-.325a.319.319 0 0 0-.484.032l-.378.483a.418.418 0 0 0 .036.541l1.32 1.266c.143.14.361.125.473-.018l5.358-7.717a.42.42 0 0 0-.063-.51zM6.013 3.316l-.478-.372a.365.365 0 0 0-.51.063L.666 9.879a.32.32 0 0 1-.484.033l-.358-.325a.319.319 0 0 0-.484.032l-.378.483a.418.418 0 0 0 .036.541l1.32 1.266c.143.14.361.125.473-.018l5.358-7.717a.42.42 0 0 0-.063-.51z" />
                                             </svg>

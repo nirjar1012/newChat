@@ -15,22 +15,27 @@ interface Conversation {
     last_message?: {
         content: string;
         created_at: string;
+        message_type: 'text' | 'image' | 'file';
     };
     participants: any[];
+    other_user?: any;
+    last_message_at?: string;
 }
 
 export function Sidebar({ onSelectConversation, selectedConversationId }: { onSelectConversation: (id: string) => void, selectedConversationId: string | null }) {
     const { user } = useUser();
+    const { socket } = useSocket();
     const [conversations, setConversations] = useState<Conversation[]>([]);
     const [searchQuery, setSearchQuery] = useState("");
-    const [searchResults, setSearchResults] = useState<any[]>([]);
-    const [isSearching, setIsSearching] = useState(false);
+    const [allUsers, setAllUsers] = useState<any[]>([]);
     const [onlineUsers, setOnlineUsers] = useState<any[]>([]);
-    const { socket } = useSocket();
+    const [unreadCounts, setUnreadCounts] = useState<{ [key: string]: number }>({});
 
     useEffect(() => {
         if (user) {
             fetchConversations();
+            fetchAllUsers();
+            fetchUnreadCounts();
         }
     }, [user]);
 
@@ -39,34 +44,81 @@ export function Sidebar({ onSelectConversation, selectedConversationId }: { onSe
 
         socket.emit("get-online-users");
 
-        socket.on("online-users", (users: any[]) => {
+        const handleOnlineUsers = (users: any[]) => {
             setOnlineUsers(users);
-        });
+        };
 
-        socket.on("user-online", ({ userId, userInfo }: { userId: string, userInfo: any }) => {
+        const handleUserOnline = ({ userId, userInfo }: { userId: string, userInfo: any }) => {
             setOnlineUsers((prev) => {
                 const exists = prev.find(u => u.id === userId);
                 if (exists) return prev;
                 return [...prev, userInfo];
             });
-        });
+        };
 
-        socket.on("user-offline", (userId: string) => {
+        const handleUserOffline = (userId: string) => {
             setOnlineUsers((prev) => prev.filter((u) => u.id !== userId));
-        });
+        };
+
+        const handleNewMessage = (message: any) => {
+            if (message.sender_id !== user?.id) {
+                if (selectedConversationId !== message.conversation_id) {
+                    setUnreadCounts(prev => ({
+                        ...prev,
+                        [message.conversation_id]: (prev[message.conversation_id] || 0) + 1
+                    }));
+                }
+                fetchConversations(); // Refresh list to show new message preview
+            }
+        };
+
+        socket.on("online-users", handleOnlineUsers);
+        socket.on("user-online", handleUserOnline);
+        socket.on("user-offline", handleUserOffline);
+        socket.on("message:receive", handleNewMessage);
 
         return () => {
-            socket.off("online-users");
-            socket.off("user-online");
-            socket.off("user-offline");
+            socket.off("online-users", handleOnlineUsers);
+            socket.off("user-online", handleUserOnline);
+            socket.off("user-offline", handleUserOffline);
+            socket.off("message:receive", handleNewMessage);
         };
-    }, [socket]);
+    }, [socket, user, selectedConversationId]);
+
+    const fetchUnreadCounts = async () => {
+        if (!user) return;
+
+        const { data: unreadData } = await supabase
+            .from("messages")
+            .select("conversation_id")
+            .neq("sender_id", user.id)
+            .is("read_at", null);
+
+        if (unreadData) {
+            const counts: { [key: string]: number } = {};
+            unreadData.forEach((msg: any) => {
+                counts[msg.conversation_id] = (counts[msg.conversation_id] || 0) + 1;
+            });
+            setUnreadCounts(counts);
+        }
+    };
+
+    const fetchAllUsers = async () => {
+        const { data, error } = await supabase
+            .from("users")
+            .select("*")
+            .neq("clerk_id", user?.id || "");
+
+        if (data) {
+            setAllUsers(data);
+        }
+    };
 
     const fetchConversations = async () => {
         if (!user) return;
 
         // 1. Get all conversation IDs for current user
-        const { data: myConvs, error } = await supabase
+        const { data: myConvs } = await supabase
             .from("conversation_members")
             .select("conversation_id")
             .eq("user_id", user.id);
@@ -75,7 +127,7 @@ export function Sidebar({ onSelectConversation, selectedConversationId }: { onSe
             const conversationIds = myConvs.map((m) => m.conversation_id);
 
             // 2. Get conversation details
-            const { data: convs, error: convError } = await supabase
+            const { data: convs } = await supabase
                 .from("conversations")
                 .select(`
                     *,
@@ -117,28 +169,8 @@ export function Sidebar({ onSelectConversation, selectedConversationId }: { onSe
                     };
                 }));
 
-                setConversations(enrichedConvs);
+                setConversations(enrichedConvs as Conversation[]);
             }
-        }
-    };
-
-    const handleSearch = async (query: string) => {
-        setSearchQuery(query);
-        if (query.length > 2) {
-            setIsSearching(true);
-            // Search by first_name, last_name, or username
-            const { data, error } = await supabase
-                .from("users")
-                .select("*")
-                .or(`first_name.ilike.%${query}%,last_name.ilike.%${query}%,username.ilike.%${query}%`)
-                .neq("clerk_id", user?.id || "");
-
-            if (data) {
-                setSearchResults(data);
-            }
-            setIsSearching(false);
-        } else {
-            setSearchResults([]);
         }
     };
 
@@ -146,31 +178,103 @@ export function Sidebar({ onSelectConversation, selectedConversationId }: { onSe
         if (!user) return;
 
         // Check if conversation already exists
-        // This is a bit complex with Supabase, for now let's just create a new one or find existing if simple
-        // For MVP, let's just create if not exists logic is hard, but ideally we check.
-        // Let's try to find one.
+        const { data: existingMembers } = await supabase
+            .from("conversation_members")
+            .select("conversation_id")
+            .eq("user_id", user.id);
 
-        // ... (Simplified for brevity, assuming create new for now or we can improve this logic)
-        // Actually, let's just create one, but we should check if one exists between these two users.
+        let existingConvId = null;
 
-        const { data: conv, error: convError } = await supabase
-            .from("conversations")
-            .insert({ is_group: false })
-            .select()
-            .single();
+        if (existingMembers) {
+            for (const member of existingMembers) {
+                const { data: otherMember } = await supabase
+                    .from("conversation_members")
+                    .select("conversation_id")
+                    .eq("conversation_id", member.conversation_id)
+                    .eq("user_id", otherUserId)
+                    .single();
 
-        if (conv) {
-            await supabase.from("conversation_members").insert([
-                { conversation_id: conv.id, user_id: user.id },
-                { conversation_id: conv.id, user_id: otherUserId }
-            ]);
+                if (otherMember) {
+                    existingConvId = otherMember.conversation_id;
+                    break;
+                }
+            }
+        }
 
-            fetchConversations();
-            onSelectConversation(conv.id);
+        if (existingConvId) {
+            onSelectConversation(existingConvId);
             setSearchQuery("");
-            setSearchResults([]);
+        } else {
+            const { data: conv } = await supabase
+                .from("conversations")
+                .insert({ is_group: false })
+                .select()
+                .single();
+
+            if (conv) {
+                await supabase.from("conversation_members").insert([
+                    { conversation_id: conv.id, user_id: user.id },
+                    { conversation_id: conv.id, user_id: otherUserId }
+                ]);
+
+                fetchConversations();
+                onSelectConversation(conv.id);
+                setSearchQuery("");
+            }
         }
     };
+
+    // Merge conversations with all users to create a unified list
+    const getUnifiedList = () => {
+        const unifiedMap = new Map();
+
+        // 1. Add all users first
+        allUsers.forEach(u => {
+            unifiedMap.set(u.clerk_id, {
+                user: u,
+                conversation: null,
+                last_message: null,
+                isOnline: onlineUsers.some(ou => ou.id === u.clerk_id),
+                unreadCount: 0
+            });
+        });
+
+        // 2. Overlay conversations
+        conversations.forEach(conv => {
+            const otherUser = conv.other_user;
+            if (otherUser && unifiedMap.has(otherUser.clerk_id)) {
+                unifiedMap.set(otherUser.clerk_id, {
+                    ...unifiedMap.get(otherUser.clerk_id),
+                    conversation: conv,
+                    last_message: conv.last_message,
+                    unreadCount: unreadCounts[conv.id] || 0
+                });
+            }
+        });
+
+        // 3. Convert to array and sort
+        return Array.from(unifiedMap.values()).sort((a: any, b: any) => {
+            // Sort by online status first
+            if (a.isOnline && !b.isOnline) return -1;
+            if (!a.isOnline && b.isOnline) return 1;
+
+            // Then by last message time
+            const timeA = a.last_message?.created_at ? new Date(a.last_message.created_at).getTime() : 0;
+            const timeB = b.last_message?.created_at ? new Date(b.last_message.created_at).getTime() : 0;
+
+            if (timeA !== timeB) return timeB - timeA;
+
+            // Finally alphabetical
+            return (a.user.first_name || "").localeCompare(b.user.first_name || "");
+        });
+    };
+
+    const unifiedList = getUnifiedList();
+    const filteredList = unifiedList.filter((item: any) => {
+        if (!searchQuery) return true;
+        const fullName = `${item.user.first_name} ${item.user.last_name}`.toLowerCase();
+        return fullName.includes(searchQuery.toLowerCase());
+    });
 
     return (
         <div className="w-[400px] border-r h-full flex flex-col bg-white border-gray-200">
@@ -198,118 +302,76 @@ export function Sidebar({ onSelectConversation, selectedConversationId }: { onSe
                         placeholder="Search or start new chat"
                         className="w-full pl-10 pr-4 py-1.5 bg-[#f0f2f5] rounded-lg text-sm focus:outline-none text-[#3b4a54] placeholder:text-[#54656f]"
                         value={searchQuery}
-                        onChange={(e) => handleSearch(e.target.value)}
+                        onChange={(e) => setSearchQuery(e.target.value)}
                     />
                 </div>
             </div>
 
-            {/* Online Users (Custom Feature - kept but styled) */}
-            <div className="py-3 px-4 border-b border-gray-100 overflow-x-auto whitespace-nowrap bg-white">
-                <div className="text-xs text-[#008069] font-medium mb-3 uppercase tracking-wider">Online Now</div>
-                <div className="flex gap-4">
-                    {onlineUsers.filter(u => u && u.id && u.id !== user?.id).map(u => (
-                        <div key={u.id} className="flex flex-col items-center cursor-pointer group" onClick={() => startConversation(u.id)}>
-                            <div className="relative">
-                                <div className="w-12 h-12 bg-gray-200 rounded-full overflow-hidden ring-2 ring-transparent group-hover:ring-[#008069] transition-all">
-                                    {u.profile_image ? <img src={u.profile_image} alt={u.first_name} className="w-full h-full object-cover" /> : (
+            {/* Unified List */}
+            <div className="flex-1 overflow-y-auto custom-scrollbar">
+                {filteredList.map((item: any) => {
+                    const u = item.user;
+                    const conv = item.conversation;
+                    const isActive = conv && selectedConversationId === conv.id;
+
+                    return (
+                        <div
+                            key={u.clerk_id}
+                            className={cn(
+                                "flex items-center gap-3 px-3 py-3 cursor-pointer transition-colors group",
+                                isActive ? "bg-[#f0f2f5]" : "hover:bg-[#f5f6f6]"
+                            )}
+                            onClick={() => startConversation(u.clerk_id)}
+                        >
+                            <div className="relative shrink-0">
+                                <div className="w-[49px] h-[49px] bg-gray-200 rounded-full overflow-hidden flex items-center justify-center">
+                                    {u.profile_image ? (
+                                        <img src={u.profile_image} alt={u.first_name} className="w-full h-full object-cover" />
+                                    ) : (
                                         <div className="w-full h-full flex items-center justify-center bg-[#dfe3e5] text-[#54656f] font-medium text-lg">
                                             {u.first_name?.[0]}{u.last_name?.[0]}
                                         </div>
                                     )}
                                 </div>
-                                <div className="absolute bottom-0.5 right-0.5 w-3 h-3 bg-[#25d366] rounded-full border-2 border-white"></div>
+                                {item.isOnline && (
+                                    <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-[#25d366] rounded-full border-2 border-white"></div>
+                                )}
                             </div>
-                            <div className="text-xs mt-1.5 text-[#3b4a54] font-medium max-w-[70px] truncate">
-                                {u.first_name}
-                            </div>
-                        </div>
-                    ))}
-                    {onlineUsers.filter(u => u && u.id && u.id !== user?.id).length === 0 && (
-                        <div className="text-sm text-[#8696a0] italic py-2">No one else is online</div>
-                    )}
-                </div>
-            </div>
-
-            {/* Conversation List */}
-            <div className="flex-1 overflow-y-auto custom-scrollbar">
-                {searchQuery.length > 0 ? (
-                    <div className="py-2">
-                        <div className="px-4 py-2 text-xs text-[#008069] font-medium uppercase">Search Results</div>
-                        {searchResults.map((u) => (
-                            <div
-                                key={u.id}
-                                className="flex items-center gap-3 px-3 py-3 hover:bg-[#f0f2f5] cursor-pointer transition-colors"
-                                onClick={() => startConversation(u.clerk_id)}
-                            >
-                                <div className="relative">
-                                    <div className="w-12 h-12 bg-gray-200 rounded-full overflow-hidden">
-                                        {u.profile_image ? <img src={u.profile_image} alt={u.username} className="w-full h-full object-cover" /> : null}
+                            <div className="flex-1 overflow-hidden border-b border-gray-100 group-hover:border-transparent pb-3 pt-1 pr-2">
+                                <div className="flex justify-between items-baseline mb-0.5">
+                                    <div className="font-semibold text-black text-[17px] truncate">
+                                        {u.first_name} {u.last_name}
                                     </div>
-                                </div>
-                                <div className="border-b border-gray-100 flex-1 py-1">
-                                    <div className="font-semibold text-black text-[17px]">{u.first_name} {u.last_name}</div>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                ) : (
-                    <div>
-                        {conversations.map((conv: any) => {
-                            const otherUser = conv.other_user;
-                            const isOnline = otherUser && onlineUsers.some(u => u.id === otherUser.clerk_id);
-                            const isActive = selectedConversationId === conv.id;
-
-                            return (
-                                <div
-                                    key={conv.id}
-                                    className={cn(
-                                        "flex items-center gap-3 px-3 py-3 cursor-pointer transition-colors group",
-                                        isActive ? "bg-[#f0f2f5]" : "hover:bg-[#f5f6f6]"
-                                    )}
-                                    onClick={() => onSelectConversation(conv.id)}
-                                >
-                                    <div className="relative shrink-0">
-                                        <div className="w-[49px] h-[49px] bg-gray-200 rounded-full overflow-hidden flex items-center justify-center">
-                                            {otherUser?.profile_image ? (
-                                                <img src={otherUser.profile_image} alt={otherUser.first_name} className="w-full h-full object-cover" />
-                                            ) : (
-                                                <UserButton />
-                                            )}
+                                    {item.last_message?.created_at && (
+                                        <div className="text-xs text-[#667781] shrink-0">
+                                            {new Date(item.last_message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}
                                         </div>
-                                        {isOnline && (
-                                            <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-[#25d366] rounded-full border-2 border-white"></div>
+                                    )}
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <div className="text-sm text-[#667781] truncate max-w-[200px]">
+                                        {item.last_message ? (
+                                            item.last_message.message_type === 'image' ? (
+                                                <span className="flex items-center gap-1"><span className="text-xs">📷</span> Photo</span>
+                                            ) : item.last_message.message_type === 'file' ? (
+                                                <span className="flex items-center gap-1"><span className="text-xs">📎</span> File</span>
+                                            ) : (
+                                                item.last_message.content
+                                            )
+                                        ) : (
+                                            <span className="italic text-xs">Start a conversation</span>
                                         )}
                                     </div>
-                                    <div className="flex-1 overflow-hidden border-b border-gray-100 group-hover:border-transparent pb-3 pt-1 pr-2">
-                                        <div className="flex justify-between items-baseline mb-0.5">
-                                            <div className="font-semibold text-black text-[17px] truncate">
-                                                {otherUser ? `${otherUser.first_name || ''} ${otherUser.last_name || ''}`.trim() || otherUser.username : "Unknown User"}
-                                            </div>
-                                            {conv.last_message?.created_at && (
-                                                <div className="text-xs text-[#667781] shrink-0">
-                                                    {new Date(conv.last_message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}
-                                                </div>
-                                            )}
+                                    {item.unreadCount > 0 && (
+                                        <div className="w-5 h-5 bg-[#25d366] rounded-full flex items-center justify-center text-white text-[10px] font-bold">
+                                            {item.unreadCount}
                                         </div>
-                                        <div className="flex justify-between items-center">
-                                            <div className="text-sm text-[#667781] truncate max-w-[200px]">
-                                                {conv.last_message?.message_type === 'image' ? (
-                                                    <span className="flex items-center gap-1"><span className="text-xs">📷</span> Photo</span>
-                                                ) : conv.last_message?.message_type === 'file' ? (
-                                                    <span className="flex items-center gap-1"><span className="text-xs">📎</span> File</span>
-                                                ) : (
-                                                    conv.last_message?.content || 'No messages yet'
-                                                )}
-                                            </div>
-                                            {/* Unread badge placeholder */}
-                                            {/* <div className="w-5 h-5 bg-[#25d366] rounded-full flex items-center justify-center text-white text-[10px] font-bold">2</div> */}
-                                        </div>
-                                    </div>
+                                    )}
                                 </div>
-                            );
-                        })}
-                    </div>
-                )}
+                            </div>
+                        </div>
+                    );
+                })}
             </div>
         </div>
     );

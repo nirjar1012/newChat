@@ -62,6 +62,21 @@ io.on('connection', (socket) => {
         socket.join(`user:${userId}`);
         console.log(`User online: ${userId}`);
 
+        // Update presence in Supabase: set online
+        try {
+            if (supabase) {
+                await supabase
+                    .from('users')
+                    .update({
+                        online_status: 'online',
+                        last_seen: new Date().toISOString()
+                    })
+                    .eq('clerk_id', userId);
+            }
+        } catch (err) {
+            console.warn('Warning: Could not update online status:', err.message);
+        }
+
         // Broadcast to all clients that this user is online with full details
         io.emit('user-online', { userId, userInfo });
 
@@ -123,17 +138,21 @@ io.on('connection', (socket) => {
             onlineUsers.delete(disconnectedUserId);
             io.emit('user-offline', disconnectedUserId);
 
-            // Update last_seen in Supabase
+            // Update presence in Supabase: set offline and update last_seen
             try {
                 if (supabase) {
+                    const now = new Date().toISOString();
                     await supabase
                         .from('users')
-                        .update({ last_seen: new Date().toISOString() })
+                        .update({
+                            online_status: 'offline',
+                            last_seen: now
+                        })
                         .eq('clerk_id', disconnectedUserId);
-                    console.log(`Updated last_seen for ${disconnectedUserId}`);
+                    console.log(`✓ ${disconnectedUserId} offline (last_seen: ${now})`);
                 }
             } catch (err) {
-                console.error('Error updating last_seen:', err);
+                console.error('✗ Error updating presence:', err.message);
             }
         }
     });
