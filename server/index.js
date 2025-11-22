@@ -34,9 +34,24 @@ io.on('connection', (socket) => {
     // Handle user coming online
     // Handle user coming online
     socket.on('user-online', async (userData) => {
-        // userData can be just ID (legacy) or object { id, first_name, last_name, profile_image }
-        const userId = typeof userData === 'string' ? userData : userData.id;
-        const userInfo = typeof userData === 'object' ? userData : { id: userId };
+        console.log('DEBUG: user-online received:', JSON.stringify(userData, null, 2));
+
+        let userId;
+        let userInfo;
+
+        if (typeof userData === 'string') {
+            userId = userData;
+            userInfo = { id: userId };
+        } else if (userData && typeof userData === 'object') {
+            // Try to find the ID in common fields
+            userId = userData.id || userData.userId || userData.clerk_id;
+            userInfo = userData;
+        }
+
+        if (!userId || typeof userId !== 'string') {
+            console.error('❌ Invalid userId derived from:', userData);
+            return;
+        }
 
         onlineUsers.set(userId, {
             socketId: socket.id,
