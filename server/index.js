@@ -32,16 +32,33 @@ io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
 
     // Handle user coming online
-    socket.on('user-online', async (userId) => {
-        onlineUsers.set(userId, { socketId: socket.id, lastSeen: new Date() });
+    // Handle user coming online
+    socket.on('user-online', async (userData) => {
+        // userData can be just ID (legacy) or object { id, first_name, last_name, profile_image }
+        const userId = typeof userData === 'string' ? userData : userData.id;
+        const userInfo = typeof userData === 'object' ? userData : { id: userId };
+
+        onlineUsers.set(userId, {
+            socketId: socket.id,
+            lastSeen: new Date(),
+            ...userInfo
+        });
+
         socket.join(`user:${userId}`);
         console.log(`User online: ${userId}`);
 
-        // Broadcast to all clients that this user is online
-        io.emit('user-online', userId);
+        // Broadcast to all clients that this user is online with full details
+        io.emit('user-online', { userId, userInfo });
 
         // Send full list of online users to the new user
-        const usersList = Array.from(onlineUsers.keys());
+        // We want to send the full objects, not just keys
+        const usersList = Array.from(onlineUsers.values()).map(u => ({
+            id: u.id,
+            first_name: u.first_name,
+            last_name: u.last_name,
+            profile_image: u.profile_image,
+            last_seen: u.lastSeen
+        }));
         socket.emit('online-users', usersList);
     });
 

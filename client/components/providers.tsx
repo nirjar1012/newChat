@@ -22,8 +22,11 @@ function UserSync() {
                     if (!data) {
                         // Insert user
                         const { error: insertError } = await supabase.from("users").insert({
+                            id: crypto.randomUUID(), // Generate UUID client-side to avoid DB default issues
                             clerk_id: user.id,
                             username: user.username || user.fullName || user.primaryEmailAddress?.emailAddress?.split("@")[0],
+                            first_name: user.firstName,
+                            last_name: user.lastName,
                             email: user.primaryEmailAddress?.emailAddress,
                             profile_image: user.imageUrl,
                         });

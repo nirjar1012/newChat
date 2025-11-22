@@ -199,7 +199,7 @@ export function Sidebar({ onSelectConversation, selectedConversationId }: { onSe
             <div className="p-3 border-b overflow-x-auto whitespace-nowrap">
                 <div className="text-xs text-gray-500 mb-2 font-semibold">ONLINE USERS</div>
                 <div className="flex gap-4">
-                    {onlineUsers.filter(u => u.id !== user?.id).map(u => (
+                    {onlineUsers.filter(u => u && u.id && u.id !== user?.id).map(u => (
                         <div key={u.id} className="flex flex-col items-center cursor-pointer" onClick={() => startConversation(u.id)}>
                             <div className="relative">
                                 <div className="w-10 h-10 bg-gray-300 rounded-full overflow-hidden">
