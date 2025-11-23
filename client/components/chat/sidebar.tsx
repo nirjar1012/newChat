@@ -62,6 +62,17 @@ export function Sidebar({ onSelectConversation, selectedConversationId }: { onSe
                 console.log('Adding user to online list:', newUser);
                 return [...prev, newUser];
             });
+
+            // Check if this is a new user not in our allUsers list
+            setAllUsers((prev) => {
+                const existsInAll = prev.some(u => u.clerk_id === userId);
+                if (!existsInAll && userInfo) {
+                    // New user! Add them to the list
+                    console.log('🆕 New user detected, adding to user list:', userId);
+                    return [...prev, { ...userInfo, clerk_id: userId }];
+                }
+                return prev;
+            });
         };
 
         const handleUserOffline = (userId: string) => {
