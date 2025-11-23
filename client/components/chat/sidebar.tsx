@@ -7,6 +7,7 @@ import { Search, Plus, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSocket } from "@/context/socket-context";
 import { FriendRequestModal } from "./friend-request-modal";
+import toast from "react-hot-toast";
 
 interface Conversation {
     id: string;
@@ -92,16 +93,41 @@ export function Sidebar({ onSelectConversation, selectedConversationId }: { onSe
             }
         };
 
+        const handleFriendshipCreated = async ({ friendId }: { friendId: string }) => {
+            console.log('🎉 New friendship created with:', friendId);
+
+            // Fetch the friend's details
+            const { data: friendData } = await supabase
+                .from("users")
+                .select("*")
+                .eq("clerk_id", friendId)
+                .single();
+
+            if (friendData) {
+                const friendName = `${friendData.first_name} ${friendData.last_name}`.trim() || friendData.username;
+                toast.success(`${friendName} is now your friend! 🎉`, {
+                    duration: 4000,
+                    icon: '👋',
+                });
+
+                // Refresh friends list
+                fetchFriends();
+                fetchPendingRequestsCount();
+            }
+        };
+
         socket.on("online-users", handleOnlineUsers);
         socket.on("user-online", handleUserOnline);
         socket.on("user-offline", handleUserOffline);
         socket.on("message:receive", handleNewMessage);
+        socket.on("friendship:created", handleFriendshipCreated);
 
         return () => {
             socket.off("online-users", handleOnlineUsers);
             socket.off("user-online", handleUserOnline);
             socket.off("user-offline", handleUserOffline);
             socket.off("message:receive", handleNewMessage);
+            socket.off("friendship:created", handleFriendshipCreated);
         };
     }, [socket, user, selectedConversationId]);
 
