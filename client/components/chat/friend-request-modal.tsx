@@ -5,6 +5,7 @@ import { useUser } from "@clerk/nextjs";
 import { supabase } from "@/lib/supabase";
 import { X, UserPlus, Clock, Check, X as XIcon } from "lucide-react";
 import { useSocket } from "@/context/socket-context";
+import toast from "react-hot-toast";
 
 interface FriendRequest {
     id: string;
@@ -90,13 +91,13 @@ export function FriendRequestModal({ isOpen, onClose }: { isOpen: boolean; onClo
                 .single();
 
             if (!receiver) {
-                alert("No user found with this email address");
+                toast.error("No user found with this email address");
                 setLoading(false);
                 return;
             }
 
             if (receiver.clerk_id === user.id) {
-                alert("You cannot send a friend request to yourself");
+                toast.error("You cannot send a friend request to yourself");
                 setLoading(false);
                 return;
             }
@@ -108,7 +109,7 @@ export function FriendRequestModal({ isOpen, onClose }: { isOpen: boolean; onClo
                 .or(`and(user1_id.eq.${user.id},user2_id.eq.${receiver.clerk_id}),and(user1_id.eq.${receiver.clerk_id},user2_id.eq.${user.id})`);
 
             if (existingFriendship && existingFriendship.length > 0) {
-                alert("You are already friends with this user");
+                toast.error("You are already friends with this user");
                 setLoading(false);
                 return;
             }
@@ -122,7 +123,7 @@ export function FriendRequestModal({ isOpen, onClose }: { isOpen: boolean; onClo
                 .eq("status", "pending");
 
             if (existingRequest && existingRequest.length > 0) {
-                alert("Friend request already sent");
+                toast.error("Friend request already sent");
                 setLoading(false);
                 return;
             }
@@ -158,10 +159,10 @@ export function FriendRequestModal({ isOpen, onClose }: { isOpen: boolean; onClo
 
             setEmail("");
             fetchSentRequests();
-            alert("Friend request sent!");
+            toast.success("Friend request sent!");
         } catch (error) {
             console.error("Error sending friend request:", error);
-            alert("Failed to send friend request");
+            toast.error("Failed to send friend request");
         } finally {
             setLoading(false);
         }
@@ -195,10 +196,10 @@ export function FriendRequestModal({ isOpen, onClose }: { isOpen: boolean; onClo
             }
 
             fetchIncomingRequests();
-            alert("Friend request accepted!");
+            toast.success("Friend request accepted!");
         } catch (error) {
             console.error("Error accepting request:", error);
-            alert("Failed to accept request");
+            toast.error("Failed to accept request");
         }
     };
 
