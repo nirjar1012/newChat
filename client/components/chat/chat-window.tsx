@@ -6,6 +6,9 @@ import { supabase } from "@/lib/supabase";
 import { useSocket } from "@/context/socket-context";
 import { Send, Paperclip, Smile, User } from "lucide-react";
 import { cn } from "@/lib/utils";
+import dynamic from "next/dynamic";
+
+const EmojiPicker = dynamic(() => import("emoji-picker-react"), { ssr: false });
 
 interface Message {
     id: string;
@@ -31,6 +34,7 @@ export function ChatWindow({ conversationId }: { conversationId: string | null }
 
     const [otherUser, setOtherUser] = useState<any>(null);
     const [isOtherUserOnline, setIsOtherUserOnline] = useState(false);
+    const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
     useEffect(() => {
         if (conversationId && user) {
@@ -406,8 +410,23 @@ export function ChatWindow({ conversationId }: { conversationId: string | null }
             </div>
 
             {/* Input */}
-            <div className="p-3 bg-gray-100 flex items-center gap-2">
-                <button className="p-2 text-gray-500 hover:bg-gray-200 rounded-full">
+            <div className="p-3 bg-gray-100 flex items-center gap-2 relative">
+                {showEmojiPicker && (
+                    <div className="absolute bottom-16 left-4 z-50">
+                        <EmojiPicker
+                            onEmojiClick={(emojiData) => {
+                                setNewMessage((prev) => prev + emojiData.emoji);
+                                setShowEmojiPicker(false);
+                            }}
+                            width={350}
+                            height={400}
+                        />
+                    </div>
+                )}
+                <button
+                    className="p-2 text-gray-500 hover:bg-gray-200 rounded-full"
+                    onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                >
                     <Smile className="w-6 h-6" />
                 </button>
                 <button
