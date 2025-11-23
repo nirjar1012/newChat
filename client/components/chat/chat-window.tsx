@@ -209,19 +209,6 @@ export function ChatWindow({ conversationId }: { conversationId: string | null }
             return;
         }
 
-        const { data: { publicUrl } } = supabase.storage
-            .from('chat_files')
-            .getPublicUrl(filePath);
-
-        const messageData = {
-            conversation_id: conversationId,
-            sender_id: user.id,
-            content: file.name,
-            file_url: publicUrl,
-            message_type: file.type.startsWith('image/') ? 'image' : 'file',
-            created_at: new Date().toISOString(),
-            read_at: null
-        };
 
         // Optimistic update
         setMessages((prev) => [...prev, messageData as any]);
@@ -256,6 +243,7 @@ export function ChatWindow({ conversationId }: { conversationId: string | null }
         if (!newMessage.trim() || !conversationId || !user) return;
 
         const messageData = {
+            id: `temp-${Date.now()}-${Math.random()}`,
             conversation_id: conversationId,
             sender_id: user.id,
             content: newMessage,
