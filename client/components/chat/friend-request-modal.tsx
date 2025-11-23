@@ -223,8 +223,8 @@ export function FriendRequestModal({ isOpen, onClose }: { isOpen: boolean; onClo
             <div className="bg-white rounded-lg w-full max-w-md max-h-[80vh] flex flex-col">
                 {/* Header */}
                 <div className="p-4 border-b flex items-center justify-between">
-                    <h2 className="text-lg font-bold">Friend Requests</h2>
-                    <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded">
+                    <h2 className="text-lg font-bold text-gray-900">Friend Requests</h2>
+                    <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded text-gray-900">
                         <X className="w-5 h-5" />
                     </button>
                 </div>
