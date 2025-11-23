@@ -425,7 +425,7 @@ export function ChatWindow({ conversationId }: { conversationId: string | null }
                 <input
                     type="text"
                     placeholder="Type a message"
-                    className="flex-1 p-2 rounded-lg border-none focus:outline-none"
+                    className="flex-1 p-2 rounded-lg border-none focus:outline-none text-gray-900"
                     value={newMessage}
                     onChange={(e) => {
                         setNewMessage(e.target.value);

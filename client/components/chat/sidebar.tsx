@@ -211,6 +211,13 @@ export function Sidebar({ onSelectConversation, selectedConversationId }: { onSe
         }
 
         if (existingConvId) {
+            // Clear unread count for this conversation
+            setUnreadCounts(prev => {
+                const newCounts = { ...prev };
+                delete newCounts[existingConvId];
+                return newCounts;
+            });
+
             onSelectConversation(existingConvId);
             setSearchQuery("");
         } else {
