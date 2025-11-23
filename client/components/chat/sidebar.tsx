@@ -45,19 +45,28 @@ export function Sidebar({ onSelectConversation, selectedConversationId }: { onSe
         socket.emit("get-online-users");
 
         const handleOnlineUsers = (users: any[]) => {
+            console.log('📋 Received online users list:', users);
             setOnlineUsers(users);
         };
 
         const handleUserOnline = ({ userId, userInfo }: { userId: string, userInfo: any }) => {
+            console.log('🟢 User came online:', userId, userInfo);
             setOnlineUsers((prev) => {
-                const exists = prev.find(u => u.id === userId);
-                if (exists) return prev;
-                return [...prev, userInfo];
+                const exists = prev.find(u => u?.id === userId || u?.clerk_id === userId);
+                if (exists) {
+                    console.log('User already in list, skipping');
+                    return prev;
+                }
+                // Ensure userInfo has the id field
+                const newUser = { ...userInfo, id: userId };
+                console.log('Adding user to online list:', newUser);
+                return [...prev, newUser];
             });
         };
 
         const handleUserOffline = (userId: string) => {
-            setOnlineUsers((prev) => prev.filter((u) => u.id !== userId));
+            console.log('🔴 User went offline:', userId);
+            setOnlineUsers((prev) => prev.filter((u) => u?.id !== userId && u?.clerk_id !== userId));
         };
 
         const handleNewMessage = (message: any) => {
