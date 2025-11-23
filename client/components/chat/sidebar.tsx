@@ -51,6 +51,13 @@ export function Sidebar({ onSelectConversation, selectedConversationId }: { onSe
 
         const handleUserOnline = ({ userId, userInfo }: { userId: string, userInfo: any }) => {
             console.log('🟢 User came online:', userId, userInfo);
+
+            // Don't add current user to their own online list
+            if (userId === user?.id) {
+                console.log('Skipping current user from online list');
+                return;
+            }
+
             setOnlineUsers((prev) => {
                 const exists = prev.find(u => u?.id === userId || u?.clerk_id === userId);
                 if (exists) {
@@ -66,7 +73,7 @@ export function Sidebar({ onSelectConversation, selectedConversationId }: { onSe
             // Check if this is a new user not in our allUsers list
             setAllUsers((prev) => {
                 const existsInAll = prev.some(u => u.clerk_id === userId);
-                if (!existsInAll && userInfo) {
+                if (!existsInAll && userInfo && userId !== user?.id) {
                     // New user! Add them to the list
                     console.log('🆕 New user detected, adding to user list:', userId);
                     return [...prev, { ...userInfo, clerk_id: userId }];
@@ -130,7 +137,9 @@ export function Sidebar({ onSelectConversation, selectedConversationId }: { onSe
             .neq("clerk_id", user?.id || "");
 
         if (data) {
-            setAllUsers(data);
+            // Filter out the current user to prevent showing them in their own list
+            const filteredUsers = data.filter(u => u.clerk_id !== user?.id);
+            setAllUsers(filteredUsers);
         }
     };
 
