@@ -375,7 +375,7 @@ export function ChatWindow({ conversationId }: { conversationId: string | null }
                                         <div className="bg-red-100 p-2 rounded-full">
                                             <Paperclip className="w-4 h-4 text-red-500" />
                                         </div>
-                                        <span className="text-sm truncate max-w-[150px]">{msg.content}</span>
+                                        <span className="text-sm text-gray-900 font-medium truncate max-w-[150px]">{msg.content}</span>
                                     </a>
                                 )}
                                 {msg.message_type === 'text' && (
