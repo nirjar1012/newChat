@@ -33,7 +33,13 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
             return;
         }
 
-        const socketInstance = io(process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3001");
+        // Use the current hostname but change port to 3001 for socket server
+        const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL ||
+            (typeof window !== 'undefined'
+                ? `http://${window.location.hostname}:3001`
+                : 'http://localhost:3001');
+
+        const socketInstance = io(socketUrl);
 
         socketInstance.on("connect", () => {
             console.log("Connected to socket server");
