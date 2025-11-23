@@ -130,6 +130,42 @@ io.on('connection', (socket) => {
         // message should contain conversation_id, sender_id, content, etc.
         io.to(`room:${message.conversation_id}`).emit('message:receive', message);
     });
+
+    socket.on('typing', ({ conversationId, userId, isTyping }) => {
+        socket.to(`room:${conversationId}`).emit('user_typing', { userId, isTyping });
+    });
+
+    socket.on('disconnect', async () => {
+        // Find user by socket id
+        let disconnectedUserId = null;
+        for (const [userId, data] of onlineUsers.entries()) {
+            if (data.socketId === socket.id) {
+                disconnectedUserId = userId;
+                break;
+            }
+        }
+
+        if (disconnectedUserId) {
+            onlineUsers.delete(disconnectedUserId);
+            io.emit('user-offline', disconnectedUserId);
+
+            // Update presence in Supabase: set offline and update last_seen
+            try {
+                if (supabase) {
+                    const now = new Date().toISOString();
+                    await supabase
+                        .from('users')
+                        .update({
+                            online_status: 'offline',
+                            last_seen: now
+                        })
+                        .eq('clerk_id', disconnectedUserId);
+                }
+            } catch (err) {
+                console.error('✗ Error updating presence:', err.message);
+            }
+        }
+    });
 });
 
 const PORT = process.env.PORT || 3001;
