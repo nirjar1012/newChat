@@ -265,7 +265,7 @@ export function FriendRequestModal({ isOpen, onClose }: { isOpen: boolean; onClo
                                 placeholder="friend@example.com"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
-                                className="w-full p-3 border rounded-lg focus:outline-none focus:border-[#25d366]"
+                                className="w-full p-3 border rounded-lg focus:outline-none focus:border-[#25d366] text-gray-900"
                                 onKeyDown={(e) => e.key === "Enter" && sendFriendRequest()}
                             />
                             <button
