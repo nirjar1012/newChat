@@ -329,7 +329,7 @@ export function Sidebar({ onSelectConversation, selectedConversationId }: { onSe
                                         <img src={u.profile_image} alt={u.first_name} className="w-full h-full object-cover" />
                                     ) : (
                                         <div className="w-full h-full flex items-center justify-center bg-[#dfe3e5] text-[#54656f] font-medium text-lg">
-                                            {u.first_name?.[0]}{u.last_name?.[0]}
+                                            {u.first_name?.[0] || u.username?.[0] || 'U'}{u.last_name?.[0] || ''}
                                         </div>
                                     )}
                                 </div>
@@ -340,7 +340,10 @@ export function Sidebar({ onSelectConversation, selectedConversationId }: { onSe
                             <div className="flex-1 overflow-hidden border-b border-gray-100 group-hover:border-transparent pb-3 pt-1 pr-2">
                                 <div className="flex justify-between items-baseline mb-0.5">
                                     <div className="font-semibold text-black text-[17px] truncate">
-                                        {u.first_name} {u.last_name}
+                                        {u.first_name || u.last_name
+                                            ? `${u.first_name || ''} ${u.last_name || ''}`.trim()
+                                            : u.username || 'User'
+                                        }
                                     </div>
                                     {item.last_message?.created_at && (
                                         <div className="text-xs text-[#667781] shrink-0">
