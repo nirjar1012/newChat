@@ -32,10 +32,7 @@ io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
 
     // Handle user coming online
-    // Handle user coming online
     socket.on('user-online', async (userData) => {
-        console.log('DEBUG: user-online received:', JSON.stringify(userData, null, 2));
-
         let userId;
         let userInfo;
 
@@ -60,7 +57,6 @@ io.on('connection', (socket) => {
         });
 
         socket.join(`user:${userId}`);
-        console.log(`User online: ${userId}`);
 
         // Update presence in Supabase: set online
         try {
@@ -81,7 +77,6 @@ io.on('connection', (socket) => {
         io.emit('user-online', { userId, userInfo });
 
         // Send full list of online users to the new user
-        // We want to send the full objects, not just keys
         const usersList = Array.from(onlineUsers.values()).map(u => ({
             id: u.id,
             first_name: u.first_name,
@@ -102,7 +97,6 @@ io.on('connection', (socket) => {
                 if (userConversations) {
                     userConversations.forEach(({ conversation_id }) => {
                         socket.join(`room:${conversation_id}`);
-                        console.log(`✓ ${userId} auto-joined room: ${conversation_id}`);
                     });
                 }
             }
@@ -126,7 +120,6 @@ io.on('connection', (socket) => {
 
     socket.on('join-room', (roomId) => {
         socket.join(`room:${roomId}`);
-        console.log(`User ${socket.id} joined room ${roomId}`);
     });
 
     socket.on('leave-room', (roomId) => {
@@ -136,44 +129,6 @@ io.on('connection', (socket) => {
     socket.on('message:send', (message) => {
         // message should contain conversation_id, sender_id, content, etc.
         io.to(`room:${message.conversation_id}`).emit('message:receive', message);
-    });
-
-    socket.on('typing', ({ conversationId, userId, isTyping }) => {
-        socket.to(`room:${conversationId}`).emit('user_typing', { userId, isTyping });
-    });
-
-    socket.on('disconnect', async () => {
-        console.log('User disconnected:', socket.id);
-        // Find user by socket id
-        let disconnectedUserId = null;
-        for (const [userId, data] of onlineUsers.entries()) {
-            if (data.socketId === socket.id) {
-                disconnectedUserId = userId;
-                break;
-            }
-        }
-
-        if (disconnectedUserId) {
-            onlineUsers.delete(disconnectedUserId);
-            io.emit('user-offline', disconnectedUserId);
-
-            // Update presence in Supabase: set offline and update last_seen
-            try {
-                if (supabase) {
-                    const now = new Date().toISOString();
-                    await supabase
-                        .from('users')
-                        .update({
-                            online_status: 'offline',
-                            last_seen: now
-                        })
-                        .eq('clerk_id', disconnectedUserId);
-                    console.log(`✓ ${disconnectedUserId} offline (last_seen: ${now})`);
-                }
-            } catch (err) {
-                console.error('✗ Error updating presence:', err.message);
-            }
-        }
     });
 });
 
