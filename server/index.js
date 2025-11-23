@@ -90,6 +90,25 @@ io.on('connection', (socket) => {
             last_seen: u.lastSeen
         }));
         socket.emit('online-users', usersList);
+
+        // Auto-join all conversation rooms for this user
+        try {
+            if (supabase) {
+                const { data: userConversations } = await supabase
+                    .from('conversation_members')
+                    .select('conversation_id')
+                    .eq('user_id', userId);
+
+                if (userConversations) {
+                    userConversations.forEach(({ conversation_id }) => {
+                        socket.join(`room:${conversation_id}`);
+                        console.log(`✓ ${userId} auto-joined room: ${conversation_id}`);
+                    });
+                }
+            }
+        } catch (err) {
+            console.warn('Warning: Could not auto-join conversation rooms:', err.message);
+        }
     });
 
     // Handle request for online users
