@@ -342,7 +342,7 @@ export function ChatWindow({ conversationId }: { conversationId: string | null }
                         }
 
                         acc.push(
-                            <div key={`date-${msg.id}`} className="flex justify-center my-4">
+                            <div key={`date-${msgDate.toDateString()}`} className="flex justify-center my-4">
                                 <span className="bg-white/90 text-gray-600 text-xs py-1 px-3 rounded-lg shadow-sm border border-gray-100">
                                     {dateLabel}
                                 </span>
