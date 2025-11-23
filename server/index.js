@@ -135,6 +135,23 @@ io.on('connection', (socket) => {
         socket.to(`room:${conversationId}`).emit('user_typing', { userId, isTyping });
     });
 
+    // Friend request events
+    socket.on('friend-request:send', ({ requestId, receiverId, senderInfo }) => {
+        console.log(`📨 Friend request sent from ${senderInfo.id} to ${receiverId}`);
+        // Notify the receiver in real-time
+        io.to(`user:${receiverId}`).emit('friend-request:received', {
+            requestId,
+            sender: senderInfo
+        });
+    });
+
+    socket.on('friend-request:accept', async ({ requestId, userId, friendId }) => {
+        console.log(`✅ Friend request accepted: ${userId} and ${friendId}`);
+        // Notify both users that they are now friends
+        io.to(`user:${userId}`).emit('friendship:created', { friendId });
+        io.to(`user:${friendId}`).emit('friendship:created', { friendId: userId });
+    });
+
     socket.on('disconnect', async () => {
         // Find user by socket id
         let disconnectedUserId = null;
