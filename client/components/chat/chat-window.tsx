@@ -195,6 +195,35 @@ export function ChatWindow({ conversationId }: { conversationId: string | null }
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file || !conversationId || !user) return;
+
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${Math.random()}.${fileExt}`;
+        const filePath = `${conversationId}/${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+            .from('chat_files')
+            .upload(filePath, file);
+
+        if (uploadError) {
+            console.error('Error uploading file:', uploadError);
+            return;
+        }
+
+        const { data: { publicUrl } } = supabase.storage
+            .from('chat_files')
+            .getPublicUrl(filePath);
+
+        const messageData = {
+            id: `temp-${Date.now()}-${Math.random()}`,
+            conversation_id: conversationId,
+            sender_id: user.id,
+            content: file.name,
+            file_url: publicUrl,
+            message_type: file.type.startsWith('image/') ? 'image' : 'file',
+            created_at: new Date().toISOString(),
+            read_at: null
+        };
+
         // Optimistic update
         setMessages((prev) => [...prev, messageData as any]);
         scrollToBottom();
