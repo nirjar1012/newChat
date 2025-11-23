@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { Search, Plus, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSocket } from "@/context/socket-context";
+import { FriendRequestModal } from "./friend-request-modal";
 
 interface Conversation {
     id: string;
@@ -27,15 +28,18 @@ export function Sidebar({ onSelectConversation, selectedConversationId }: { onSe
     const { socket } = useSocket();
     const [conversations, setConversations] = useState<Conversation[]>([]);
     const [searchQuery, setSearchQuery] = useState("");
-    const [allUsers, setAllUsers] = useState<any[]>([]);
+    const [friends, setFriends] = useState<any[]>([]);
     const [onlineUsers, setOnlineUsers] = useState<any[]>([]);
     const [unreadCounts, setUnreadCounts] = useState<{ [key: string]: number }>({});
+    const [showFriendModal, setShowFriendModal] = useState(false);
+    const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
 
     useEffect(() => {
         if (user) {
             fetchConversations();
-            fetchAllUsers();
+            fetchFriends();
             fetchUnreadCounts();
+            fetchPendingRequestsCount();
         }
     }, [user]);
 
@@ -68,17 +72,6 @@ export function Sidebar({ onSelectConversation, selectedConversationId }: { onSe
                 const newUser = { ...userInfo, id: userId };
                 console.log('Adding user to online list:', newUser);
                 return [...prev, newUser];
-            });
-
-            // Check if this is a new user not in our allUsers list
-            setAllUsers((prev) => {
-                const existsInAll = prev.some(u => u.clerk_id === userId);
-                if (!existsInAll && userInfo && userId !== user?.id) {
-                    // New user! Add them to the list
-                    console.log('🆕 New user detected, adding to user list:', userId);
-                    return [...prev, { ...userInfo, clerk_id: userId }];
-                }
-                return prev;
             });
         };
 
@@ -130,16 +123,45 @@ export function Sidebar({ onSelectConversation, selectedConversationId }: { onSe
         }
     };
 
-    const fetchAllUsers = async () => {
-        const { data, error } = await supabase
-            .from("users")
+    const fetchFriends = async () => {
+        if (!user) return;
+
+        // Get all friendships where user is either user1 or user2
+        const { data: friendships } = await supabase
+            .from("friends")
             .select("*")
-            .neq("clerk_id", user?.id || "");
+            .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`);
+
+        if (friendships) {
+            // Extract friend IDs and fetch their details
+            const friendIds = friendships.map(f =>
+                f.user1_id === user.id ? f.user2_id : f.user1_id
+            );
+
+            if (friendIds.length > 0) {
+                const { data: friendsData } = await supabase
+                    .from("users")
+                    .select("*")
+                    .in("clerk_id", friendIds);
+
+                if (friendsData) {
+                    setFriends(friendsData);
+                }
+            }
+        }
+    };
+
+    const fetchPendingRequestsCount = async () => {
+        if (!user) return;
+
+        const { data } = await supabase
+            .from("friend_requests")
+            .select("id")
+            .eq("receiver_id", user.id)
+            .eq("status", "pending");
 
         if (data) {
-            // Filter out the current user to prevent showing them in their own list
-            const filteredUsers = data.filter(u => u.clerk_id !== user?.id);
-            setAllUsers(filteredUsers);
+            setPendingRequestsCount(data.length);
         }
     };
 
@@ -260,12 +282,12 @@ export function Sidebar({ onSelectConversation, selectedConversationId }: { onSe
         }
     };
 
-    // Merge conversations with all users to create a unified list
+    // Merge conversations with friends to create a unified list
     const getUnifiedList = () => {
         const unifiedMap = new Map();
 
-        // 1. Add all users first
-        allUsers.forEach(u => {
+        // 1. Add all friends first
+        friends.forEach((u: any) => {
             unifiedMap.set(u.clerk_id, {
                 user: u,
                 conversation: null,
@@ -321,8 +343,16 @@ export function Sidebar({ onSelectConversation, selectedConversationId }: { onSe
                     <button className="p-2 hover:bg-gray-200 rounded-full transition-colors">
                         <MessageSquare className="w-5 h-5" />
                     </button>
-                    <button className="p-2 hover:bg-gray-200 rounded-full transition-colors">
+                    <button
+                        className="p-2 hover:bg-gray-200 rounded-full transition-colors relative"
+                        onClick={() => setShowFriendModal(true)}
+                    >
                         <Plus className="w-5 h-5" />
+                        {pendingRequestsCount > 0 && (
+                            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                                {pendingRequestsCount}
+                            </span>
+                        )}
                     </button>
                 </div>
             </div>
@@ -412,6 +442,16 @@ export function Sidebar({ onSelectConversation, selectedConversationId }: { onSe
                     );
                 })}
             </div>
+
+            {/* Friend Request Modal */}
+            <FriendRequestModal
+                isOpen={showFriendModal}
+                onClose={() => {
+                    setShowFriendModal(false);
+                    fetchFriends(); // Refresh friends list
+                    fetchPendingRequestsCount(); // Refresh count
+                }}
+            />
         </div>
     );
 }
