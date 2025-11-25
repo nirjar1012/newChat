@@ -11,8 +11,13 @@ app.use(cors());
 const server = http.createServer(app);
 const io = new Server(server, {
     cors: {
-        origin: process.env.CLIENT_URL || "http://localhost:3000",
-        methods: ["GET", "POST"]
+        origin: [
+            "http://localhost:3000",
+            "http://192.168.0.11:3000",
+            "http://0.0.0.0:3000"
+        ],
+        methods: ["GET", "POST"],
+        credentials: true
     }
 });
 

@@ -42,7 +42,6 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
         const socketInstance = io(socketUrl);
 
         socketInstance.on("connect", () => {
-            console.log("Connected to socket server");
             setIsConnected(true);
             if (user) {
                 socketInstance.emit("user-online", {
@@ -56,7 +55,6 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
         });
 
         socketInstance.on("disconnect", () => {
-            console.log("Disconnected from socket server");
             setIsConnected(false);
         });
 

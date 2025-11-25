@@ -241,15 +241,22 @@ export function ChatWindow({ conversationId }: { conversationId: string | null }
             .single();
 
         if (data) {
-            // Update conversation timestamp
-            await supabase
-                .from("conversations")
-                .update({ last_message_at: new Date().toISOString() })
-                .eq("id", conversationId);
-
+            // Emit socket event immediately for real-time delivery
             if (socket) {
                 socket.emit("message:send", data);
             }
+
+            // Update conversation timestamp asynchronously (non-blocking)
+            (async () => {
+                try {
+                    await supabase
+                        .from("conversations")
+                        .update({ last_message_at: new Date().toISOString() })
+                        .eq("id", conversationId);
+                } catch (err) {
+                    console.warn("Failed to update conversation timestamp:", err);
+                }
+            })();
         }
     };
 
@@ -283,15 +290,22 @@ export function ChatWindow({ conversationId }: { conversationId: string | null }
             .single();
 
         if (data) {
-            // Update conversation timestamp
-            await supabase
-                .from("conversations")
-                .update({ last_message_at: new Date().toISOString() })
-                .eq("id", conversationId);
-
+            // Emit socket event immediately for real-time delivery
             if (socket) {
                 socket.emit("message:send", data);
             }
+
+            // Update conversation timestamp asynchronously (non-blocking)
+            (async () => {
+                try {
+                    await supabase
+                        .from("conversations")
+                        .update({ last_message_at: new Date().toISOString() })
+                        .eq("id", conversationId);
+                } catch (err) {
+                    console.warn("Failed to update conversation timestamp:", err);
+                }
+            })();
         }
     };
 

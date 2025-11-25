@@ -50,34 +50,27 @@ export function Sidebar({ onSelectConversation, selectedConversationId }: { onSe
         socket.emit("get-online-users");
 
         const handleOnlineUsers = (users: any[]) => {
-            console.log('📋 Received online users list:', users);
             setOnlineUsers(users);
         };
 
         const handleUserOnline = ({ userId, userInfo }: { userId: string, userInfo: any }) => {
-            console.log('🟢 User came online:', userId, userInfo);
-
             // Don't add current user to their own online list
             if (userId === user?.id) {
-                console.log('Skipping current user from online list');
                 return;
             }
 
             setOnlineUsers((prev) => {
                 const exists = prev.find(u => u?.id === userId || u?.clerk_id === userId);
                 if (exists) {
-                    console.log('User already in list, skipping');
                     return prev;
                 }
                 // Ensure userInfo has the id field
                 const newUser = { ...userInfo, id: userId };
-                console.log('Adding user to online list:', newUser);
                 return [...prev, newUser];
             });
         };
 
         const handleUserOffline = (userId: string) => {
-            console.log('🔴 User went offline:', userId);
             setOnlineUsers((prev) => prev.filter((u) => u?.id !== userId && u?.clerk_id !== userId));
         };
 
@@ -94,8 +87,6 @@ export function Sidebar({ onSelectConversation, selectedConversationId }: { onSe
         };
 
         const handleFriendshipCreated = async ({ friendId }: { friendId: string }) => {
-            console.log('🎉 New friendship created with:', friendId);
-
             // Fetch the friend's details
             const { data: friendData } = await supabase
                 .from("users")
