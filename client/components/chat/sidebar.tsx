@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { UserButton, useUser } from "@clerk/nextjs";
+import { UserButton } from "@/components/auth/user-button";
 import { supabase } from "@/lib/supabase";
+import type { User } from "@supabase/supabase-js";
 import { Search, Plus, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSocket } from "@/context/socket-context";
@@ -25,15 +26,28 @@ interface Conversation {
 }
 
 export function Sidebar({ onSelectConversation, selectedConversationId }: { onSelectConversation: (id: string) => void, selectedConversationId: string | null }) {
-    const { user } = useUser();
+    const [user, setUser] = useState<User | null>(null);
     const { socket } = useSocket();
     const [conversations, setConversations] = useState<Conversation[]>([]);
-    const [searchQuery, setSearchQuery] = useState("");
     const [friends, setFriends] = useState<any[]>([]);
     const [onlineUsers, setOnlineUsers] = useState<any[]>([]);
-    const [unreadCounts, setUnreadCounts] = useState<{ [key: string]: number }>({});
+    const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
+    const [searchQuery, setSearchQuery] = useState("");
     const [showFriendModal, setShowFriendModal] = useState(false);
     const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
+
+    // Get authenticated user
+    useEffect(() => {
+        supabase.auth.getUser().then(({ data: { user } }) => {
+            setUser(user);
+        });
+
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+            setUser(session?.user ?? null);
+        });
+
+        return () => subscription.unsubscribe();
+    }, []);
 
     useEffect(() => {
         if (user) {
@@ -50,28 +64,35 @@ export function Sidebar({ onSelectConversation, selectedConversationId }: { onSe
         socket.emit("get-online-users");
 
         const handleOnlineUsers = (users: any[]) => {
+            console.log('📋 Received online users list:', users);
             setOnlineUsers(users);
         };
 
         const handleUserOnline = ({ userId, userInfo }: { userId: string, userInfo: any }) => {
+            console.log('🟢 User came online:', userId, userInfo);
+
             // Don't add current user to their own online list
             if (userId === user?.id) {
+                console.log('Skipping current user from online list');
                 return;
             }
 
             setOnlineUsers((prev) => {
-                const exists = prev.find(u => u?.id === userId || u?.clerk_id === userId);
+                const exists = prev.find(u => u?.id === userId || u?.id === userId);
                 if (exists) {
+                    console.log('User already in list, skipping');
                     return prev;
                 }
                 // Ensure userInfo has the id field
                 const newUser = { ...userInfo, id: userId };
+                console.log('Adding user to online list:', newUser);
                 return [...prev, newUser];
             });
         };
 
         const handleUserOffline = (userId: string) => {
-            setOnlineUsers((prev) => prev.filter((u) => u?.id !== userId && u?.clerk_id !== userId));
+            console.log('🔴 User went offline:', userId);
+            setOnlineUsers((prev) => prev.filter((u) => u?.id !== userId));
         };
 
         const handleNewMessage = (message: any) => {
@@ -87,11 +108,13 @@ export function Sidebar({ onSelectConversation, selectedConversationId }: { onSe
         };
 
         const handleFriendshipCreated = async ({ friendId }: { friendId: string }) => {
+            console.log('🎉 New friendship created with:', friendId);
+
             // Fetch the friend's details
             const { data: friendData } = await supabase
                 .from("users")
                 .select("*")
-                .eq("clerk_id", friendId)
+                .eq("id", friendId)
                 .single();
 
             if (friendData) {
@@ -159,7 +182,7 @@ export function Sidebar({ onSelectConversation, selectedConversationId }: { onSe
                 const { data: friendsData } = await supabase
                     .from("users")
                     .select("*")
-                    .in("clerk_id", friendIds);
+                    .in("id", friendIds);
 
                 if (friendsData) {
                     setFriends(friendsData);
@@ -216,7 +239,7 @@ export function Sidebar({ onSelectConversation, selectedConversationId }: { onSe
                         const { data: userData } = await supabase
                             .from("users")
                             .select("*")
-                            .eq("clerk_id", otherMember.user_id)
+                            .eq("id", otherMember.user_id)
                             .single();
                         otherUser = userData;
                     }
@@ -233,181 +256,145 @@ export function Sidebar({ onSelectConversation, selectedConversationId }: { onSe
                     return {
                         ...conv,
                         other_user: otherUser,
-                        last_message: lastMsg
+                        last_message: lastMsg,
+                        participants: [otherUser]
                     };
                 }));
 
-                setConversations(enrichedConvs as Conversation[]);
+                setConversations(enrichedConvs);
             }
         }
     };
 
-    const startConversation = async (otherUserId: string) => {
+    const handleCreateConversation = async (friendId: string) => {
         if (!user) return;
 
-        // Check if conversation already exists
-        const { data: existingMembers } = await supabase
-            .from("conversation_members")
-            .select("conversation_id")
-            .eq("user_id", user.id);
+        try {
+            // Check if conversation already exists
+            const { data: existingConvs } = await supabase
+                .from("conversation_members")
+                .select("conversation_id")
+                .eq("user_id", user.id);
 
-        let existingConvId = null;
+            if (existingConvs) {
+                for (const conv of existingConvs) {
+                    const { data: otherMember } = await supabase
+                        .from("conversation_members")
+                        .select("*")
+                        .eq("conversation_id", conv.conversation_id)
+                        .eq("user_id", friendId)
+                        .single();
 
-        if (existingMembers) {
-            for (const member of existingMembers) {
-                const { data: otherMember } = await supabase
-                    .from("conversation_members")
-                    .select("conversation_id")
-                    .eq("conversation_id", member.conversation_id)
-                    .eq("user_id", otherUserId)
-                    .single();
-
-                if (otherMember) {
-                    existingConvId = otherMember.conversation_id;
-                    break;
+                    if (otherMember) {
+                        onSelectConversation(conv.conversation_id);
+                        setSearchQuery(""); // Clear search
+                        return;
+                    }
                 }
             }
-        }
 
-        if (existingConvId) {
-            // Clear unread count for this conversation
-            setUnreadCounts(prev => {
-                const newCounts = { ...prev };
-                delete newCounts[existingConvId];
-                return newCounts;
-            });
-
-            onSelectConversation(existingConvId);
-            setSearchQuery("");
-        } else {
-            const { data: conv } = await supabase
+            // Create new conversation
+            const { data: newConv, error: convError } = await supabase
                 .from("conversations")
-                .insert({ is_group: false })
+                .insert({
+                    is_group: false,
+                    created_at: new Date().toISOString(),
+                    last_message_at: new Date().toISOString()
+                })
                 .select()
                 .single();
 
-            if (conv) {
-                await supabase.from("conversation_members").insert([
-                    { conversation_id: conv.id, user_id: user.id },
-                    { conversation_id: conv.id, user_id: otherUserId }
+            if (convError) throw convError;
+
+            // Add members
+            await supabase
+                .from("conversation_members")
+                .insert([
+                    { conversation_id: newConv.id, user_id: user.id, joined_at: new Date().toISOString() },
+                    { conversation_id: newConv.id, user_id: friendId, joined_at: new Date().toISOString() }
                 ]);
 
-                fetchConversations();
-                onSelectConversation(conv.id);
-                setSearchQuery("");
-            }
+            fetchConversations();
+            onSelectConversation(newConv.id);
+            setSearchQuery(""); // Clear search
+        } catch (error) {
+            console.error("Error creating conversation:", error);
+            toast.error("Failed to start conversation");
         }
     };
 
-    // Merge conversations with friends to create a unified list
-    const getUnifiedList = () => {
-        const unifiedMap = new Map();
-
-        // 1. Add all friends first
-        friends.forEach((u: any) => {
-            unifiedMap.set(u.clerk_id, {
-                user: u,
-                conversation: null,
-                last_message: null,
-                isOnline: onlineUsers.some(ou => ou.id === u.clerk_id),
-                unreadCount: 0
-            });
-        });
-
-        // 2. Overlay conversations
-        conversations.forEach(conv => {
-            const otherUser = conv.other_user;
-            if (otherUser && unifiedMap.has(otherUser.clerk_id)) {
-                unifiedMap.set(otherUser.clerk_id, {
-                    ...unifiedMap.get(otherUser.clerk_id),
-                    conversation: conv,
-                    last_message: conv.last_message,
-                    unreadCount: unreadCounts[conv.id] || 0
-                });
-            }
-        });
-
-        // 3. Convert to array and sort
-        return Array.from(unifiedMap.values()).sort((a: any, b: any) => {
-            // Sort by online status first
-            if (a.isOnline && !b.isOnline) return -1;
-            if (!a.isOnline && b.isOnline) return 1;
-
-            // Then by last message time
-            const timeA = a.last_message?.created_at ? new Date(a.last_message.created_at).getTime() : 0;
-            const timeB = b.last_message?.created_at ? new Date(b.last_message.created_at).getTime() : 0;
-
-            if (timeA !== timeB) return timeB - timeA;
-
-            // Finally alphabetical
-            return (a.user.first_name || "").localeCompare(b.user.first_name || "");
-        });
-    };
-
-    const unifiedList = getUnifiedList();
-    const filteredList = unifiedList.filter((item: any) => {
-        if (!searchQuery) return true;
-        const fullName = `${item.user.first_name} ${item.user.last_name}`.toLowerCase();
-        return fullName.includes(searchQuery.toLowerCase());
-    });
+    const filteredItems = searchQuery
+        ? friends.filter(friend =>
+            friend.first_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            friend.last_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            friend.username?.toLowerCase().includes(searchQuery.toLowerCase())
+        )
+        : conversations;
 
     return (
-        <div className="w-[400px] border-r h-full flex flex-col bg-white border-gray-200">
+        <div className="w-[400px] h-full bg-white border-r flex flex-col">
             {/* Header */}
-            <div className="h-[60px] px-4 bg-[#f0f2f5] flex items-center justify-between border-b border-gray-200 shrink-0">
+            <div className="h-16 bg-[#f0f2f5] px-4 flex items-center justify-between shrink-0">
                 <UserButton />
                 <div className="flex gap-4 text-[#54656f]">
-                    <button className="p-2 hover:bg-gray-200 rounded-full transition-colors">
-                        <MessageSquare className="w-5 h-5" />
-                    </button>
                     <button
-                        className="p-2 hover:bg-gray-200 rounded-full transition-colors relative"
                         onClick={() => setShowFriendModal(true)}
+                        className="p-2 hover:bg-black/10 rounded-full relative"
+                        title="Friend Requests"
                     >
-                        <Plus className="w-5 h-5" />
+                        <Plus className="w-6 h-6" />
                         {pendingRequestsCount > 0 && (
-                            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                            <span className="absolute top-0 right-0 w-5 h-5 bg-[#25d366] rounded-full border-2 border-[#f0f2f5] flex items-center justify-center text-[10px] font-bold text-white">
                                 {pendingRequestsCount}
                             </span>
                         )}
                     </button>
+                    <button className="p-2 hover:bg-black/10 rounded-full">
+                        <MessageSquare className="w-5 h-5" />
+                    </button>
                 </div>
             </div>
 
-            {/* Search & Filter */}
-            <div className="p-2 bg-white border-b border-gray-100">
-                <div className="relative">
-                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-[#54656f]">
-                        <Search className="w-4 h-4" />
-                    </div>
+            {/* Search */}
+            <div className="p-2 bg-white border-b shrink-0">
+                <div className="bg-[#f0f2f5] rounded-lg flex items-center px-4 py-2">
+                    <Search className="w-5 h-5 text-[#54656f] mr-4" />
                     <input
                         type="text"
                         placeholder="Search or start new chat"
-                        className="w-full pl-10 pr-4 py-1.5 bg-[#f0f2f5] rounded-lg text-sm focus:outline-none text-[#3b4a54] placeholder:text-[#54656f]"
+                        className="bg-transparent w-full focus:outline-none text-[#3b4a54] placeholder:text-[#54656f]"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                     />
                 </div>
             </div>
 
-            {/* Unified List */}
-            <div className="flex-1 overflow-y-auto custom-scrollbar">
-                {filteredList.map((item: any) => {
-                    const u = item.user;
-                    const conv = item.conversation;
-                    const isActive = conv && selectedConversationId === conv.id;
+            {/* List */}
+            <div className="flex-1 overflow-y-auto">
+                {searchQuery && filteredItems.length === 0 && (
+                    <div className="p-4 text-center text-gray-500">
+                        No friends found. Add friends to start chatting!
+                    </div>
+                )}
+
+                {filteredItems.map((item: any) => {
+                    // Determine if item is a conversation or a friend (search result)
+                    const isConversation = !searchQuery;
+                    const u = isConversation ? item.other_user : item;
+
+                    if (!u) return null;
 
                     return (
                         <div
-                            key={u.clerk_id}
+                            key={isConversation ? item.id : u.id}
                             className={cn(
-                                "flex items-center gap-3 px-3 py-3 cursor-pointer transition-colors group",
-                                isActive ? "bg-[#f0f2f5]" : "hover:bg-[#f5f6f6]"
+                                "flex items-center px-3 py-2 cursor-pointer hover:bg-[#f5f6f6] group transition-colors",
+                                selectedConversationId === (isConversation ? item.id : null) && "bg-[#f0f2f5]"
                             )}
-                            onClick={() => startConversation(u.clerk_id)}
+                            onClick={() => isConversation ? onSelectConversation(item.id) : handleCreateConversation(u.id)}
                         >
-                            <div className="relative shrink-0">
-                                <div className="w-[49px] h-[49px] bg-gray-200 rounded-full overflow-hidden flex items-center justify-center">
+                            <div className="relative w-12 h-12 mr-3 shrink-0">
+                                <div className="w-12 h-12 rounded-full overflow-hidden">
                                     {u.profile_image ? (
                                         <img src={u.profile_image} alt={u.first_name} className="w-full h-full object-cover" />
                                     ) : (
@@ -416,7 +403,7 @@ export function Sidebar({ onSelectConversation, selectedConversationId }: { onSe
                                         </div>
                                     )}
                                 </div>
-                                {item.isOnline && (
+                                {onlineUsers.some(onlineUser => onlineUser.id === u.id) && (
                                     <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-[#25d366] rounded-full border-2 border-white"></div>
                                 )}
                             </div>
@@ -428,7 +415,7 @@ export function Sidebar({ onSelectConversation, selectedConversationId }: { onSe
                                             : u.username || 'User'
                                         }
                                     </div>
-                                    {item.last_message?.created_at && (
+                                    {isConversation && item.last_message?.created_at && (
                                         <div className="text-xs text-[#667781] shrink-0">
                                             {new Date(item.last_message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}
                                         </div>
@@ -436,21 +423,25 @@ export function Sidebar({ onSelectConversation, selectedConversationId }: { onSe
                                 </div>
                                 <div className="flex justify-between items-center">
                                     <div className="text-sm text-[#667781] truncate max-w-[200px]">
-                                        {item.last_message ? (
-                                            item.last_message.message_type === 'image' ? (
-                                                <span className="flex items-center gap-1"><span className="text-xs">📷</span> Photo</span>
-                                            ) : item.last_message.message_type === 'file' ? (
-                                                <span className="flex items-center gap-1"><span className="text-xs">📎</span> File</span>
+                                        {isConversation ? (
+                                            item.last_message ? (
+                                                item.last_message.message_type === 'image' ? (
+                                                    <span className="flex items-center gap-1"><span className="text-xs">📷</span> Photo</span>
+                                                ) : item.last_message.message_type === 'file' ? (
+                                                    <span className="flex items-center gap-1"><span className="text-xs">📎</span> File</span>
+                                                ) : (
+                                                    item.last_message.content
+                                                )
                                             ) : (
-                                                item.last_message.content
+                                                <span className="italic text-xs">Start a conversation</span>
                                             )
                                         ) : (
-                                            <span className="italic text-xs">Start a conversation</span>
+                                            <span className="text-xs">Click to start chat</span>
                                         )}
                                     </div>
-                                    {item.unreadCount > 0 && (
+                                    {isConversation && unreadCounts[item.id] > 0 && (
                                         <div className="w-5 h-5 bg-[#25d366] rounded-full flex items-center justify-center text-white text-[10px] font-bold">
-                                            {item.unreadCount}
+                                            {unreadCounts[item.id]}
                                         </div>
                                     )}
                                 </div>

@@ -2,7 +2,8 @@
 
 import { createContext, useContext, useEffect, useState } from "react";
 import { io, Socket } from "socket.io-client";
-import { useUser } from "@clerk/nextjs";
+import { supabase } from "@/lib/supabase";
+import type { User } from "@supabase/supabase-js";
 
 interface SocketContextType {
     socket: Socket | null;
@@ -21,7 +22,20 @@ export const useSocket = () => {
 export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
     const [socket, setSocket] = useState<Socket | null>(null);
     const [isConnected, setIsConnected] = useState(false);
-    const { user } = useUser();
+    const [user, setUser] = useState<User | null>(null);
+
+    // Get authenticated user
+    useEffect(() => {
+        supabase.auth.getUser().then(({ data: { user } }) => {
+            setUser(user);
+        });
+
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+            setUser(session?.user ?? null);
+        });
+
+        return () => subscription.unsubscribe();
+    }, []);
 
     useEffect(() => {
         if (!user) {
@@ -42,19 +56,21 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
         const socketInstance = io(socketUrl);
 
         socketInstance.on("connect", () => {
+            console.log("Connected to socket server");
             setIsConnected(true);
             if (user) {
                 socketInstance.emit("user-online", {
                     id: user.id,
-                    first_name: user.firstName,
-                    last_name: user.lastName,
-                    profile_image: user.imageUrl,
-                    email: user.primaryEmailAddress?.emailAddress
+                    first_name: user.user_metadata?.first_name || '',
+                    last_name: user.user_metadata?.last_name || '',
+                    profile_image: user.user_metadata?.avatar_url || '',
+                    email: user.email
                 });
             }
         });
 
         socketInstance.on("disconnect", () => {
+            console.log("Disconnected from socket server");
             setIsConnected(false);
         });
 

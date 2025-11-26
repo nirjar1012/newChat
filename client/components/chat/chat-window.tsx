@@ -1,12 +1,12 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useUser } from "@clerk/nextjs";
 import { supabase } from "@/lib/supabase";
 import { useSocket } from "@/context/socket-context";
-import { Send, Paperclip, Smile, User } from "lucide-react";
+import { Send, Paperclip, Smile, User as UserIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import dynamic from "next/dynamic";
+import type { User } from "@supabase/supabase-js";
 
 const EmojiPicker = dynamic(() => import("emoji-picker-react"), { ssr: false });
 
@@ -21,11 +21,24 @@ interface Message {
 }
 
 export function ChatWindow({ conversationId }: { conversationId: string | null }) {
-    const { user } = useUser();
+    const [user, setUser] = useState<User | null>(null);
     const { socket } = useSocket();
     const [messages, setMessages] = useState<Message[]>([]);
     const [newMessage, setNewMessage] = useState("");
     const messagesEndRef = useRef<HTMLDivElement>(null);
+
+    // Get authenticated user
+    useEffect(() => {
+        supabase.auth.getUser().then(({ data: { user } }) => {
+            setUser(user);
+        });
+
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+            setUser(session?.user ?? null);
+        });
+
+        return () => subscription.unsubscribe();
+    }, []);
 
     const [isTyping, setIsTyping] = useState(false);
     const [typingUser, setTypingUser] = useState<string | null>(null);
@@ -96,18 +109,18 @@ export function ChatWindow({ conversationId }: { conversationId: string | null }
         socket.emit("get-online-users");
 
         const handleOnlineUsers = (users: any[]) => {
-            const isOnline = users.some(u => u.id === otherUser.clerk_id);
+            const isOnline = users.some(u => u.id === otherUser.id);
             setIsOtherUserOnline(isOnline);
         };
 
         const handleUserOnline = ({ userId }: { userId: string }) => {
-            if (userId === otherUser.clerk_id) {
+            if (userId === otherUser.id) {
                 setIsOtherUserOnline(true);
             }
         };
 
         const handleUserOffline = (userId: string) => {
-            if (userId === otherUser.clerk_id) {
+            if (userId === otherUser.id) {
                 setIsOtherUserOnline(false);
             }
         };
@@ -148,7 +161,7 @@ export function ChatWindow({ conversationId }: { conversationId: string | null }
                 const { data: userData } = await supabase
                     .from("users")
                     .select("*")
-                    .eq("clerk_id", otherMember.user_id)
+                    .eq("id", otherMember.user_id)
                     .single();
                 setOtherUser(userData);
             }
@@ -241,22 +254,15 @@ export function ChatWindow({ conversationId }: { conversationId: string | null }
             .single();
 
         if (data) {
-            // Emit socket event immediately for real-time delivery
+            // Update conversation timestamp
+            await supabase
+                .from("conversations")
+                .update({ last_message_at: new Date().toISOString() })
+                .eq("id", conversationId);
+
             if (socket) {
                 socket.emit("message:send", data);
             }
-
-            // Update conversation timestamp asynchronously (non-blocking)
-            (async () => {
-                try {
-                    await supabase
-                        .from("conversations")
-                        .update({ last_message_at: new Date().toISOString() })
-                        .eq("id", conversationId);
-                } catch (err) {
-                    console.warn("Failed to update conversation timestamp:", err);
-                }
-            })();
         }
     };
 
@@ -290,22 +296,15 @@ export function ChatWindow({ conversationId }: { conversationId: string | null }
             .single();
 
         if (data) {
-            // Emit socket event immediately for real-time delivery
+            // Update conversation timestamp
+            await supabase
+                .from("conversations")
+                .update({ last_message_at: new Date().toISOString() })
+                .eq("id", conversationId);
+
             if (socket) {
                 socket.emit("message:send", data);
             }
-
-            // Update conversation timestamp asynchronously (non-blocking)
-            (async () => {
-                try {
-                    await supabase
-                        .from("conversations")
-                        .update({ last_message_at: new Date().toISOString() })
-                        .eq("id", conversationId);
-                } catch (err) {
-                    console.warn("Failed to update conversation timestamp:", err);
-                }
-            })();
         }
     };
 
@@ -325,7 +324,7 @@ export function ChatWindow({ conversationId }: { conversationId: string | null }
                     {otherUser?.profile_image ? (
                         <img src={otherUser.profile_image} alt={otherUser.first_name} />
                     ) : (
-                        <User className="w-6 h-6 text-gray-500" />
+                        <UserIcon className="w-6 h-6 text-gray-500" />
                     )}
                 </div>
                 <div>
@@ -333,7 +332,7 @@ export function ChatWindow({ conversationId }: { conversationId: string | null }
                         {otherUser ? `${otherUser.first_name || ''} ${otherUser.last_name || ''}`.trim() || otherUser.username : "Chat"}
                     </div>
                     <div className="text-xs text-gray-500">
-                        {typingUser === otherUser?.clerk_id ? "typing..." : isOtherUserOnline ? "Online" : otherUser?.last_seen ? `Last seen ${new Date(otherUser.last_seen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : "Offline"}
+                        {typingUser === otherUser?.id ? "typing..." : isOtherUserOnline ? "Online" : otherUser?.last_seen ? `Last seen ${new Date(otherUser.last_seen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : "Offline"}
                     </div>
                 </div>
             </div>
