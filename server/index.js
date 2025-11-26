@@ -69,10 +69,9 @@ io.on('connection', (socket) => {
                 await supabase
                     .from('users')
                     .update({
-                        online_status: 'online',
                         last_seen: new Date().toISOString()
                     })
-                    .eq('clerk_id', userId);
+                    .eq('id', userId);
             }
         } catch (err) {
             console.warn('Warning: Could not update online status:', err.message);
@@ -178,10 +177,9 @@ io.on('connection', (socket) => {
                     await supabase
                         .from('users')
                         .update({
-                            online_status: 'offline',
                             last_seen: now
                         })
-                        .eq('clerk_id', disconnectedUserId);
+                        .eq('id', disconnectedUserId);
                 }
             } catch (err) {
                 console.error('✗ Error updating presence:', err.message);
