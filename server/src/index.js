@@ -11,13 +11,8 @@ app.use(cors());
 const server = http.createServer(app);
 const io = new Server(server, {
     cors: {
-        origin: [
-            "http://localhost:3000",
-            "http://192.168.0.11:3000",
-            "http://0.0.0.0:3000"
-        ],
-        methods: ["GET", "POST"],
-        credentials: true
+        origin: process.env.CLIENT_URL || "http://localhost:3000",
+        methods: ["GET", "POST"]
     }
 });
 
@@ -69,9 +64,10 @@ io.on('connection', (socket) => {
                 await supabase
                     .from('users')
                     .update({
+                        online_status: 'online',
                         last_seen: new Date().toISOString()
                     })
-                    .eq('id', userId);
+                    .eq('clerk_id', userId);
             }
         } catch (err) {
             console.warn('Warning: Could not update online status:', err.message);
@@ -177,9 +173,10 @@ io.on('connection', (socket) => {
                     await supabase
                         .from('users')
                         .update({
+                            online_status: 'offline',
                             last_seen: now
                         })
-                        .eq('id', disconnectedUserId);
+                        .eq('clerk_id', disconnectedUserId);
                 }
             } catch (err) {
                 console.error('✗ Error updating presence:', err.message);

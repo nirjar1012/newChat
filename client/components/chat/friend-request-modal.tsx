@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import type { User } from "@supabase/supabase-js";
+import { useUser } from "@clerk/nextjs";
 import { supabase } from "@/lib/supabase";
 import { X, UserPlus, Clock, Check, X as XIcon } from "lucide-react";
 import { useSocket } from "@/context/socket-context";
@@ -24,26 +24,13 @@ interface FriendRequest {
 }
 
 export function FriendRequestModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
-    const [user, setUser] = useState<User | null>(null);
+    const { user } = useUser();
     const { socket } = useSocket();
     const [email, setEmail] = useState("");
     const [incomingRequests, setIncomingRequests] = useState<FriendRequest[]>([]);
     const [sentRequests, setSentRequests] = useState<FriendRequest[]>([]);
     const [activeTab, setActiveTab] = useState<"send" | "incoming" | "sent">("send");
     const [loading, setLoading] = useState(false);
-
-    // Get authenticated user
-    useEffect(() => {
-        supabase.auth.getUser().then(({ data: { user } }) => {
-            setUser(user);
-        });
-
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-            setUser(session?.user ?? null);
-        });
-
-        return () => subscription.unsubscribe();
-    }, []);
 
     useEffect(() => {
         if (isOpen && user) {
@@ -68,7 +55,7 @@ export function FriendRequestModal({ isOpen, onClose }: { isOpen: boolean; onClo
                     const { data: sender } = await supabase
                         .from("users")
                         .select("*")
-                        .eq("id", req.sender_id)
+                        .eq("clerk_id", req.sender_id)
                         .single();
                     return { ...req, sender };
                 })
@@ -109,7 +96,7 @@ export function FriendRequestModal({ isOpen, onClose }: { isOpen: boolean; onClo
                 return;
             }
 
-            if (receiver.id === user.id) {
+            if (receiver.clerk_id === user.id) {
                 toast.error("You cannot send a friend request to yourself");
                 setLoading(false);
                 return;
@@ -119,7 +106,7 @@ export function FriendRequestModal({ isOpen, onClose }: { isOpen: boolean; onClo
             const { data: existingFriendship } = await supabase
                 .from("friends")
                 .select("*")
-                .or(`and(user1_id.eq.${user.id},user2_id.eq.${receiver.id}),and(user1_id.eq.${receiver.id},user2_id.eq.${user.id})`);
+                .or(`and(user1_id.eq.${user.id},user2_id.eq.${receiver.clerk_id}),and(user1_id.eq.${receiver.clerk_id},user2_id.eq.${user.id})`);
 
             if (existingFriendship && existingFriendship.length > 0) {
                 toast.error("You are already friends with this user");
@@ -147,7 +134,7 @@ export function FriendRequestModal({ isOpen, onClose }: { isOpen: boolean; onClo
                 .insert({
                     sender_id: user.id,
                     receiver_email: email.trim(),
-                    receiver_id: receiver.id,
+                    receiver_id: receiver.clerk_id,
                     status: "pending"
                 })
                 .select()
@@ -159,10 +146,13 @@ export function FriendRequestModal({ isOpen, onClose }: { isOpen: boolean; onClo
             if (socket) {
                 socket.emit("friend-request:send", {
                     requestId: request.id,
-                    receiverId: receiver.id,
+                    receiverId: receiver.clerk_id,
                     senderInfo: {
                         id: user.id,
-                        email: user.email
+                        firstName: user.firstName,
+                        lastName: user.lastName,
+                        email: user.primaryEmailAddress?.emailAddress,
+                        profileImage: user.imageUrl
                     }
                 });
             }
