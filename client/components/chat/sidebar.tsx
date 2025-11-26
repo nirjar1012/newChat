@@ -115,7 +115,7 @@ export function Sidebar({ onSelectConversation, selectedConversationId }: { onSe
                 .from("users")
                 .select("*")
                 .eq("id", friendId)
-                .single();
+                .maybeSingle();
 
             if (friendData) {
                 const friendName = `${friendData.first_name} ${friendData.last_name}`.trim() || friendData.username;
@@ -240,7 +240,7 @@ export function Sidebar({ onSelectConversation, selectedConversationId }: { onSe
                             .from("users")
                             .select("*")
                             .eq("id", otherMember.user_id)
-                            .single();
+                            .maybeSingle();
                         otherUser = userData;
                     }
 

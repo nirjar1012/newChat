@@ -39,20 +39,20 @@ function UserSync() {
                 .from("users")
                 .select("*")
                 .eq("id", authUser.id)
-                .single();
+                .maybeSingle();
 
             if (!existingUser) {
                 // Create new user profile
                 const { error } = await supabase
                     .from("users")
-                    .insert({
+                    .upsert({
                         id: authUser.id,
                         email: authUser.email!,
                         first_name: authUser.user_metadata?.first_name || '',
                         last_name: authUser.user_metadata?.last_name || '',
                         username: authUser.email?.split('@')[0] || '',
                         profile_image: authUser.user_metadata?.avatar_url || '',
-                    });
+                    }, { onConflict: 'id', ignoreDuplicates: true });
 
                 if (error) {
                     console.warn("Error creating user profile:", error.message);
