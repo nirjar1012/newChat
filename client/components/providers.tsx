@@ -1,60 +1,64 @@
 "use client";
 
-import { ClerkProvider, useUser } from "@clerk/nextjs";
 import { SocketProvider } from "@/context/socket-context";
-import { useEffect, useRef } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { Toaster } from "react-hot-toast";
+import { AuthModal } from "@/components/auth/auth-modal";
+import type { User } from "@supabase/supabase-js";
 
 function UserSync() {
-    const { user, isLoaded } = useUser();
-    const syncAttemptedRef = useRef(false);
+    const [user, setUser] = useState<User | null>(null);
 
     useEffect(() => {
-        // Only attempt sync once per mount when user is loaded
-        if (isLoaded && user && !syncAttemptedRef.current) {
-            syncAttemptedRef.current = true;
-            syncUser();
-        }
+        // Get initial user
+        supabase.auth.getUser().then(({ data: { user } }) => {
+            if (user) {
+                setUser(user);
+                syncUser(user);
+            }
+        });
 
-        // Reset ref when user changes
-        if (!user) {
-            syncAttemptedRef.current = false;
-        }
-    }, [user, isLoaded]);
+        // Listen for auth changes
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+            const currentUser = session?.user ?? null;
+            setUser(currentUser);
 
-    const syncUser = async () => {
-        if (!user) return;
+            if (currentUser) {
+                await syncUser(currentUser);
+            }
+        });
 
+        return () => subscription.unsubscribe();
+    }, []);
+
+    const syncUser = async (authUser: User) => {
         try {
-            // UPSERT: Insert if not exists, Update if exists (idempotent)
-            const { error } = await supabase
+            // Check if user profile exists
+            const { data: existingUser } = await supabase
                 .from("users")
-                .upsert(
-                    {
-                        clerk_id: user.id,
-                        username: user.username || user.fullName || user.primaryEmailAddress?.emailAddress?.split("@")[0] || "User",
-                        first_name: user.firstName || "",
-                        last_name: user.lastName || "",
-                        email: user.primaryEmailAddress?.emailAddress || "",
-                        profile_image: user.imageUrl || "",
-                        online_status: 'online',
-                        last_seen: new Date().toISOString(),
-                    },
-                    {
-                        onConflict: 'clerk_id',  // Specify conflict resolution on clerk_id
-                        ignoreDuplicates: false  // Always update on conflict
-                    }
-                );
+                .select("*")
+                .eq("id", authUser.id)
+                .maybeSingle();
 
-            if (error) {
-                // Only log critical errors, suppress expected conflicts
-                if (error.code !== '23505') {  // 23505 = unique violation (shouldn't happen with upsert)
-                    console.warn("User sync warning:", error.message);
+            if (!existingUser) {
+                // Create new user profile
+                const { error } = await supabase
+                    .from("users")
+                    .upsert({
+                        id: authUser.id,
+                        email: authUser.email!,
+                        first_name: authUser.user_metadata?.first_name || '',
+                        last_name: authUser.user_metadata?.last_name || '',
+                        username: authUser.email?.split('@')[0] || '',
+                        profile_image: authUser.user_metadata?.avatar_url || '',
+                    }, { onConflict: 'id', ignoreDuplicates: true });
+
+                if (error) {
+                    console.warn("Error creating user profile:", error.message);
                 }
             }
         } catch (err) {
-            // Graceful error handling - don't crash the app
             console.warn("User sync error:", err instanceof Error ? err.message : "Unknown error");
         }
     };
@@ -62,9 +66,55 @@ function UserSync() {
     return null;
 }
 
+function AuthWrapper({ children }: { children: React.ReactNode }) {
+    const [user, setUser] = useState<User | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [showAuthModal, setShowAuthModal] = useState(false);
+
+    useEffect(() => {
+        supabase.auth.getSession().then(({ data: { session } }) => {
+            setUser(session?.user ?? null);
+            setLoading(false);
+            if (!session?.user) {
+                setShowAuthModal(true);
+            }
+        });
+
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+            setUser(session?.user ?? null);
+            setShowAuthModal(!session?.user);
+
+            // Clean up URL after auth redirect
+            if (typeof window !== 'undefined' && window.location.search.includes('code=')) {
+                window.history.replaceState({}, document.title, window.location.pathname);
+            }
+        });
+
+        return () => subscription.unsubscribe();
+    }, []);
+
+    if (loading) {
+        return (
+            <div className="h-screen w-screen flex items-center justify-center">
+                <div className="text-center">
+                    <div className="w-16 h-16 border-4 border-[#25d366] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                    <p className="text-gray-600">Loading...</p>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <>
+            <AuthModal isOpen={showAuthModal} onClose={() => { }} />
+            {user && children}
+        </>
+    );
+}
+
 export function Providers({ children }: { children: React.ReactNode }) {
     return (
-        <ClerkProvider>
+        <AuthWrapper>
             <SocketProvider>
                 <UserSync />
                 {children}
@@ -85,6 +135,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
                     }}
                 />
             </SocketProvider>
-        </ClerkProvider>
+        </AuthWrapper>
     );
 }
